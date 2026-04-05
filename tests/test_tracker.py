@@ -15,6 +15,7 @@ from focussight.tracker import (
     resolve_runtime_config,
     save_profile,
     generate_ops_artifacts,
+    map_flipped_box_to_original,
     parse_session_tags,
     report_output_paths,
     smooth_box,
@@ -198,6 +199,10 @@ class FocusLogicTests(unittest.TestCase):
         self.assertEqual(tags["task_tag"], "deep_work")
         self.assertEqual(tags["context_tag"], "exam_prep")
         self.assertEqual(tags["location_tag"], "campus_lab")
+
+    def test_map_flipped_box_to_original(self):
+        mapped = map_flipped_box_to_original((20, 10, 30, 40), frame_width=200)
+        self.assertEqual(mapped, (150, 10, 30, 40))
 
     def test_generate_ops_artifacts(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -13,6 +13,7 @@ from .ops_report import build_ops_report, render_ops_report
 
 face_xml = "haarcascade_frontalface_default.xml"
 eye_xml = "haarcascade_eye.xml"
+profile_face_xml = "haarcascade_profileface.xml"
 
 FOCUSED_THRESHOLD = 0.6
 ALERT_AFTER_SECONDS = 2.5
@@ -102,6 +103,12 @@ def smooth_box(boxes):
     sw = sum(b[2] for b in boxes)
     sh = sum(b[3] for b in boxes)
     return (sx // count, sy // count, sw // count, sh // count)
+
+
+def map_flipped_box_to_original(box, frame_width):
+    """Convert a box detected on a horizontally flipped frame back to original coords."""
+    x, y, w, h = box
+    return (frame_width - x - w, y, w, h)
 
 
 def compute_observed_fps(frame_interval_seconds):
@@ -376,7 +383,7 @@ def run_calibration_phase(
 
 def ensure_cascades(face_path, eye_path):
     """Download cascades if missing and return initialized classifiers."""
-    for xml in [face_path, eye_path]:
+    for xml in [face_path, eye_path, profile_face_xml]:
         if not os.path.exists(xml):
             print(f"Downloading {xml}...")
             url = f"https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/{xml}"
@@ -384,11 +391,12 @@ def ensure_cascades(face_path, eye_path):
 
     face_cascade_local = cv2.CascadeClassifier(face_path)
     eye_cascade_local = cv2.CascadeClassifier(eye_path)
+    profile_face_cascade_local = cv2.CascadeClassifier(profile_face_xml)
 
-    if face_cascade_local.empty() or eye_cascade_local.empty():
+    if face_cascade_local.empty() or eye_cascade_local.empty() or profile_face_cascade_local.empty():
         raise RuntimeError("Could not load haarcascade xml files.")
 
-    return face_cascade_local, eye_cascade_local
+    return face_cascade_local, eye_cascade_local, profile_face_cascade_local
 
 
 def run_focus_tracker(
@@ -404,7 +412,7 @@ def run_focus_tracker(
     context_tag="",
     location_tag="",
 ):
-    face_cascade_local, eye_cascade_local = ensure_cascades(face_xml, eye_xml)
+    face_cascade_local, eye_cascade_local, profile_face_cascade_local = ensure_cascades(face_xml, eye_xml)
     cap = cv2.VideoCapture(camera_index)
 
     if not cap.isOpened():
@@ -457,9 +465,27 @@ def run_focus_tracker(
                 break
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            gray_blur = cv2.GaussianBlur(gray, (3, 3), 0)
+            gray_proc = cv2.equalizeHist(gray_blur)
             brightness_mean = float(gray.mean())
 
-            faces = face_cascade_local.detectMultiScale(gray, 1.3, 5)
+            faces = []
+            # Multi-pass face search for robustness to hats/angles.
+            for scale_factor, min_neighbors in [(1.2, 5), (1.1, 4)]:
+                frontal_faces = face_cascade_local.detectMultiScale(gray_proc, scale_factor, min_neighbors)
+                faces.extend(frontal_faces)
+                if faces:
+                    break
+
+            if not faces:
+                profile_faces = profile_face_cascade_local.detectMultiScale(gray_proc, 1.1, 4)
+                faces.extend(profile_faces)
+
+                flipped = cv2.flip(gray_proc, 1)
+                flipped_profiles = profile_face_cascade_local.detectMultiScale(flipped, 1.1, 4)
+                width = gray_proc.shape[1]
+                faces.extend([map_flipped_box_to_original(box, width) for box in flipped_profiles])
+
             face_found = len(faces) > 0
             eye_found = False
 
@@ -473,9 +499,15 @@ def run_focus_tracker(
                     xf, yf, wf, hf = smoothed_face
                     cv2.rectangle(frame, (xf, yf), (xf + wf, yf + hf), (255, 0, 0), 2)
 
-                    roi_gray = gray[yf : yf + hf // 2, xf : xf + wf]
+                    roi_gray = gray_proc[yf : yf + hf // 2, xf : xf + wf]
                     roi_color = frame[yf : yf + hf // 2, xf : xf + wf]
-                    eyes = eye_cascade_local.detectMultiScale(roi_gray, 1.1, 10)
+                    eyes = eye_cascade_local.detectMultiScale(roi_gray, 1.05, 8)
+
+                    if len(eyes) == 0:
+                        # Fallback: scan whole face ROI if upper-half misses due to pose/hat occlusion.
+                        roi_gray_full = gray_proc[yf : yf + hf, xf : xf + wf]
+                        eyes = eye_cascade_local.detectMultiScale(roi_gray_full, 1.05, 10)
+                        roi_color = frame[yf : yf + hf, xf : xf + wf]
 
                     for (ex, ey, ew, eh) in eyes[:2]:
                         cv2.rectangle(roi_color, (ex, ey), (ex + ew, ey + eh), (0, 255, 0), 2)

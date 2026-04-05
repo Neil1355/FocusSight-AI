@@ -31,5 +31,6 @@
 - Added JSON export support to ops report CLI (`--save-json`).
 - Added session tags in tracker logging (`--task-tag`, `--context-tag`, `--location-tag`) for operational context grouping.
 - Added grouped analytics helpers in summary module and tag-baseline comparison section in ops report output.
+- Improved face robustness for real-world usage (hats and head tilt) by adding profile-face cascade fallback, flipped-profile mapping, histogram-equalized preprocessing, and wider eye-search fallback.
 - Expanded tests in `tests/test_tracker.py` and `tests/test_summary.py`, including new signal-quality behavior coverage.
 - Added `tests/test_ops_report.py` for cognitive operations report metrics/rendering.
