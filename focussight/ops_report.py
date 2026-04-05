@@ -3,7 +3,7 @@ import json
 import os
 from statistics import mean
 
-from .summary import load_session_rows, summarize_directory, summarize_file
+from .summary import load_session_rows, summarize_directory, summarize_directory_with_tags, summarize_file
 
 
 def _clip(value, minimum=0.0, maximum=1.0):
@@ -70,15 +70,46 @@ def derive_cog_sci_metrics(summary, rows):
     }
 
 
+def _dominant_tag(rows, tag_name):
+    counts = {}
+    for row in rows:
+        value = (row.get(tag_name) or "unspecified").strip() or "unspecified"
+        counts[value] = counts.get(value, 0) + 1
+    if not counts:
+        return "unspecified"
+    return max(counts, key=lambda key: counts[key])
+
+
+def build_tag_comparison(rows, log_dir="logs"):
+    if not rows:
+        return {}
+
+    grouped = summarize_directory_with_tags(log_dir)
+    task_tag = _dominant_tag(rows, "task_tag")
+    context_tag = _dominant_tag(rows, "context_tag")
+    location_tag = _dominant_tag(rows, "location_tag")
+
+    return {
+        "task_tag": task_tag,
+        "context_tag": context_tag,
+        "location_tag": location_tag,
+        "task_baseline": grouped["by_task_tag"].get(task_tag),
+        "context_baseline": grouped["by_context_tag"].get(context_tag),
+        "location_baseline": grouped["by_location_tag"].get(location_tag),
+    }
+
+
 def build_ops_report(csv_path):
     summary = summarize_file(csv_path)
     rows = load_session_rows(csv_path)
     metrics = derive_cog_sci_metrics(summary, rows)
+    comparison = build_tag_comparison(rows)
 
     report = {
         "file": csv_path,
         "summary": summary,
         "cog_sci": metrics,
+        "comparison": comparison,
     }
     return report
 
@@ -86,6 +117,15 @@ def build_ops_report(csv_path):
 def render_ops_report(report):
     summary = report["summary"]
     cog = report["cog_sci"]
+    comparison = report.get("comparison", {})
+
+    def _baseline_line(label, baseline):
+        if not baseline:
+            return f"- {label}: no baseline yet"
+        return (
+            f"- {label}: avg_focus={baseline['avg_focus'] * 100:.1f}% "
+            f"over {baseline['rows']} samples"
+        )
 
     lines = [
         "FocusSight Cognitive Operations Report",
@@ -103,6 +143,14 @@ def render_ops_report(report):
         f"- Operational readiness: {cog['operational_readiness']:.2f}",
         f"- Attention lapse events: {cog['attention_lapse_events']}",
         f"- Mean recovery time: {cog['mean_recovery_seconds']:.2f}s",
+        "",
+        "Tag Baselines",
+        f"- Session task tag: {comparison.get('task_tag', 'unspecified')}",
+        f"- Session context tag: {comparison.get('context_tag', 'unspecified')}",
+        f"- Session location tag: {comparison.get('location_tag', 'unspecified')}",
+        _baseline_line("Task baseline", comparison.get("task_baseline")),
+        _baseline_line("Context baseline", comparison.get("context_baseline")),
+        _baseline_line("Location baseline", comparison.get("location_baseline")),
         "",
         f"Interpretation: {cog['interpretation']}",
     ]

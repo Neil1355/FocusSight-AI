@@ -36,6 +36,7 @@ Deliverables:
 - Add daily/weekly trend output (CSV or JSON)
 - Add "best focus window" and "most distracted window" metrics
 - Add cognitive-operations interpretation layer (vigilance, stability, readiness)
+- Add session tagging and baseline comparisons by task/context/location
 
 ## Phase 4: Coaching Layer
 

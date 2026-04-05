@@ -13,6 +13,7 @@ FocusSight AI is a webcam-based focus tracker that detects face and eyes in real
 - Optional calibration mode to personalize thresholds before tracking starts
 - Runtime logging toggle to save session data to CSV
 - Auto-generate operational reports when logging ends
+- Session tagging for real-world context comparisons
 - Runtime tuning from real session data
 - Phase 2 weighted signal quality scoring and status labels
 - Low-light and occlusion fallback labels for poor camera conditions
@@ -84,6 +85,10 @@ Auto-generate report artifacts when logs end:
 
 python -m focussight.tracker --autolog --auto-report --report-dir reports
 
+Tag a session for grouped analytics:
+
+python -m focussight.tracker --autolog --auto-report --task-tag coding --context-tag study --location-tag lab
+
 Use quiet mode for cleaner terminal output:
 
 python -m focussight.tracker --quiet
@@ -143,6 +148,7 @@ The report includes:
 - Attention lapse events
 - Mean recovery time
 - A practical interpretation line for field use
+- Baseline comparisons for matching task/context/location tags
 
 ## Run Tests
 

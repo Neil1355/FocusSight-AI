@@ -32,6 +32,20 @@ def log_info(message, quiet=False):
         print(message)
 
 
+def parse_session_tags(task_tag=None, context_tag=None, location_tag=None):
+    """Normalize optional session tags used for grouped analytics."""
+    def _clean(value):
+        if value is None:
+            return ""
+        return str(value).strip().lower().replace(" ", "_")
+
+    return {
+        "task_tag": _clean(task_tag),
+        "context_tag": _clean(context_tag),
+        "location_tag": _clean(location_tag),
+    }
+
+
 def clamp(value, minimum, maximum):
     return max(minimum, min(value, maximum))
 
@@ -219,6 +233,9 @@ def start_session_logger(log_dir="logs"):
             "eye_found",
             "focused_threshold",
             "alert_after_seconds",
+            "task_tag",
+            "context_tag",
+            "location_tag",
         ]
     )
     return file_handle, writer, log_path
@@ -383,6 +400,9 @@ def run_focus_tracker(
     auto_report=False,
     report_dir="reports",
     quiet=False,
+    task_tag="",
+    context_tag="",
+    location_tag="",
 ):
     face_cascade_local, eye_cascade_local = ensure_cascades(face_xml, eye_xml)
     cap = cv2.VideoCapture(camera_index)
@@ -413,6 +433,7 @@ def run_focus_tracker(
     log_writer = None
     active_log_path = None
     generated_report_logs = set()
+    session_tags = parse_session_tags(task_tag, context_tag, location_tag)
 
     eye_stable_seconds = 0.0
     last_face_seen_time = time.time()
@@ -507,6 +528,9 @@ def run_focus_tracker(
                         int(eye_found),
                         f"{focused_threshold:.3f}",
                         f"{alert_after_seconds:.2f}",
+                        session_tags["task_tag"],
+                        session_tags["context_tag"],
+                        session_tags["location_tag"],
                     ]
                 )
 
@@ -640,6 +664,9 @@ def parse_args():
     parser.add_argument("--auto-report", action="store_true", help="Generate ops report when logging stops")
     parser.add_argument("--report-dir", type=str, default="reports", help="Directory for generated reports")
     parser.add_argument("--quiet", action="store_true", help="Reduce terminal output noise")
+    parser.add_argument("--task-tag", type=str, default="", help="Optional task label (e.g., reading, coding)")
+    parser.add_argument("--context-tag", type=str, default="", help="Optional context label (e.g., study, exam_prep)")
+    parser.add_argument("--location-tag", type=str, default="", help="Optional location label (e.g., lab, library)")
     return parser.parse_args()
 
 
@@ -661,6 +688,9 @@ def main():
         auto_report=args.auto_report,
         report_dir=args.report_dir,
         quiet=args.quiet,
+        task_tag=args.task_tag,
+        context_tag=args.context_tag,
+        location_tag=args.location_tag,
     )
 
     if args.save_profile:

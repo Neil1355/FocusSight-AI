@@ -48,6 +48,9 @@ def load_session_rows(csv_path):
                     "observed_fps": observed_fps,
                     "focus_score": score,
                     "state": state,
+                    "task_tag": (row.get("task_tag") or "").strip(),
+                    "context_tag": (row.get("context_tag") or "").strip(),
+                    "location_tag": (row.get("location_tag") or "").strip(),
                 }
             )
     return rows
@@ -129,6 +132,66 @@ def summarize_directory(log_dir="logs"):
     pattern = os.path.join(log_dir, "focus_session_*.csv")
     files = sorted(glob.glob(pattern))
     return [summarize_file(path) for path in files]
+
+
+def group_rows_by_tag(rows, tag_name):
+    grouped = {}
+    for row in rows:
+        tag_value = (row.get(tag_name) or "unspecified").strip() or "unspecified"
+        grouped.setdefault(tag_value, []).append(row)
+    return grouped
+
+
+def summarize_rows(rows):
+    if not rows:
+        return {
+            "rows": 0,
+            "avg_focus": 0.0,
+            "avg_fps": 0.0,
+            "distracted_pct": 0.0,
+            "longest_distracted_streak_frames": 0,
+            "longest_distracted_streak_seconds": 0.0,
+        }
+
+    scores = [row["focus_score"] for row in rows]
+    avg_focus = sum(scores) / len(scores)
+    distracted = sum(1 for row in rows if row["state"] == "DISTRACTED")
+    distracted_pct = (distracted / len(rows)) * 100.0
+    fps_values = [row["observed_fps"] for row in rows if row.get("observed_fps") is not None]
+    avg_fps = (sum(fps_values) / len(fps_values)) if fps_values else 0.0
+
+    return {
+        "rows": len(rows),
+        "avg_focus": avg_focus,
+        "avg_fps": avg_fps,
+        "distracted_pct": distracted_pct,
+        "longest_distracted_streak_frames": longest_distracted_streak(rows),
+        "longest_distracted_streak_seconds": longest_distracted_streak_seconds(rows),
+    }
+
+
+def summarize_by_tag(rows, tag_name):
+    grouped = group_rows_by_tag(rows, tag_name)
+    output = {}
+    for tag_value, tag_rows in grouped.items():
+        output[tag_value] = summarize_rows(tag_rows)
+    return output
+
+
+def summarize_directory_with_tags(log_dir="logs"):
+    pattern = os.path.join(log_dir, "focus_session_*.csv")
+    files = sorted(glob.glob(pattern))
+    all_rows = []
+    for file_path in files:
+        all_rows.extend(load_session_rows(file_path))
+
+    return {
+        "total_sessions": len(files),
+        "total_rows": len(all_rows),
+        "by_task_tag": summarize_by_tag(all_rows, "task_tag"),
+        "by_context_tag": summarize_by_tag(all_rows, "context_tag"),
+        "by_location_tag": summarize_by_tag(all_rows, "location_tag"),
+    }
 
 
 def print_report(summary):

@@ -3,7 +3,7 @@ import tempfile
 import os
 import json
 
-from focussight.ops_report import derive_cog_sci_metrics, render_ops_report, save_ops_report_json
+from focussight.ops_report import derive_cog_sci_metrics, render_ops_report, save_ops_report_json, build_tag_comparison
 
 
 class OpsReportTests(unittest.TestCase):
@@ -73,6 +73,16 @@ class OpsReportTests(unittest.TestCase):
             with open(output_path, "r", encoding="utf-8") as handle:
                 loaded = json.load(handle)
             self.assertEqual(loaded["file"], report["file"])
+
+    def test_build_tag_comparison(self):
+        rows = [
+            {"task_tag": "coding", "context_tag": "study", "location_tag": "lab"},
+            {"task_tag": "coding", "context_tag": "study", "location_tag": "lab"},
+        ]
+        comparison = build_tag_comparison(rows)
+        self.assertEqual(comparison["task_tag"], "coding")
+        self.assertEqual(comparison["context_tag"], "study")
+        self.assertEqual(comparison["location_tag"], "lab")
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ from focussight.tracker import (
     resolve_runtime_config,
     save_profile,
     generate_ops_artifacts,
+    parse_session_tags,
     report_output_paths,
     smooth_box,
     update_stability_seconds,
@@ -191,6 +192,12 @@ class FocusLogicTests(unittest.TestCase):
         txt_path, json_path = report_output_paths("logs/focus_session_1.csv", "reports")
         self.assertTrue(txt_path.endswith("focus_session_1_ops_report.txt"))
         self.assertTrue(json_path.endswith("focus_session_1_ops_report.json"))
+
+    def test_parse_session_tags(self):
+        tags = parse_session_tags("Deep Work", "Exam Prep", "Campus Lab")
+        self.assertEqual(tags["task_tag"], "deep_work")
+        self.assertEqual(tags["context_tag"], "exam_prep")
+        self.assertEqual(tags["location_tag"], "campus_lab")
 
     def test_generate_ops_artifacts(self):
         with tempfile.TemporaryDirectory() as temp_dir:

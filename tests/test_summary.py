@@ -6,7 +6,9 @@ import unittest
 from focussight.summary import (
     longest_distracted_streak,
     longest_distracted_streak_seconds,
+    summarize_by_tag,
     summarize_file,
+    summarize_rows,
     tune_recommendation,
 )
 
@@ -66,6 +68,22 @@ class SessionSummaryTests(unittest.TestCase):
             self.assertEqual(summary["longest_distracted_streak_frames"], 2)
             self.assertAlmostEqual(summary["avg_fps"], 5.0)
             self.assertAlmostEqual(summary["longest_distracted_streak_seconds"], 0.2)
+
+    def test_summarize_by_tag(self):
+        rows = [
+            {"focus_score": 0.9, "state": "FOCUSED", "observed_fps": 5.0, "elapsed_seconds": 0.0, "task_tag": "reading"},
+            {"focus_score": 0.2, "state": "DISTRACTED", "observed_fps": 5.0, "elapsed_seconds": 0.2, "task_tag": "reading"},
+            {"focus_score": 0.8, "state": "FOCUSED", "observed_fps": 6.0, "elapsed_seconds": 0.0, "task_tag": "coding"},
+        ]
+        grouped = summarize_by_tag(rows, "task_tag")
+        self.assertIn("reading", grouped)
+        self.assertIn("coding", grouped)
+        self.assertGreater(grouped["reading"]["rows"], 0)
+
+    def test_summarize_rows_empty(self):
+        summary = summarize_rows([])
+        self.assertEqual(summary["rows"], 0)
+        self.assertEqual(summary["avg_focus"], 0.0)
 
 
 if __name__ == "__main__":

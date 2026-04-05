@@ -29,5 +29,7 @@
 - Added tracker-side auto-report generation on log stop/exit (`--auto-report`, `--report-dir`) producing text and JSON artifacts.
 - Added quiet runtime mode (`--quiet`) to reduce terminal spam during operations use.
 - Added JSON export support to ops report CLI (`--save-json`).
+- Added session tags in tracker logging (`--task-tag`, `--context-tag`, `--location-tag`) for operational context grouping.
+- Added grouped analytics helpers in summary module and tag-baseline comparison section in ops report output.
 - Expanded tests in `tests/test_tracker.py` and `tests/test_summary.py`, including new signal-quality behavior coverage.
 - Added `tests/test_ops_report.py` for cognitive operations report metrics/rendering.
