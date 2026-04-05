@@ -113,6 +113,8 @@ def build_recommendations(summary, cog_metrics, windows, temporal_trends):
         recommendations.append("Schedule a 5-10 minute reset before the next high-load task.")
     if summary["longest_distracted_streak_seconds"] >= 45:
         recommendations.append("Use shorter work intervals with more frequent check-ins.")
+    if summary["longest_distracted_streak_seconds"] >= 75:
+        recommendations.append("Take a 2-5 minute break now before continuing deep-focus work.")
     if summary["avg_fps"] and summary["avg_fps"] < 6.0:
         recommendations.append("Camera FPS is low; improve lighting or reduce camera load for cleaner signals.")
 
@@ -139,6 +141,59 @@ def build_recommendations(summary, cog_metrics, windows, temporal_trends):
     return recommendations
 
 
+def build_session_scorecard(
+    summary,
+    cog_metrics,
+    focus_goal=0.75,
+    readiness_goal=0.65,
+    distracted_pct_goal=35.0,
+    recovery_goal_seconds=8.0,
+):
+    checks = {
+        "focus_goal": {
+            "target": focus_goal,
+            "actual": summary["avg_focus"],
+            "pass": summary["avg_focus"] >= focus_goal,
+            "weight": 30,
+        },
+        "readiness_goal": {
+            "target": readiness_goal,
+            "actual": cog_metrics["operational_readiness"],
+            "pass": cog_metrics["operational_readiness"] >= readiness_goal,
+            "weight": 30,
+        },
+        "distracted_pct_goal": {
+            "target": distracted_pct_goal,
+            "actual": summary["distracted_pct"],
+            "pass": summary["distracted_pct"] <= distracted_pct_goal,
+            "weight": 20,
+        },
+        "recovery_goal": {
+            "target": recovery_goal_seconds,
+            "actual": cog_metrics["mean_recovery_seconds"],
+            "pass": cog_metrics["mean_recovery_seconds"] <= recovery_goal_seconds,
+            "weight": 20,
+        },
+    }
+
+    total_weight = sum(item["weight"] for item in checks.values())
+    achieved = sum(item["weight"] for item in checks.values() if item["pass"])
+    score = achieved / total_weight if total_weight else 0.0
+
+    if score >= 0.85:
+        status = "on-track"
+    elif score >= 0.6:
+        status = "mixed"
+    else:
+        status = "needs-adjustment"
+
+    return {
+        "score": score,
+        "status": status,
+        "checks": checks,
+    }
+
+
 def build_ops_report(csv_path):
     summary = summarize_file(csv_path)
     rows = load_session_rows(csv_path)
@@ -147,6 +202,7 @@ def build_ops_report(csv_path):
     windows = extract_focus_windows(rows)
     temporal_trends = summarize_directory_temporal("logs")
     recommendations = build_recommendations(summary, metrics, windows, temporal_trends)
+    scorecard = build_session_scorecard(summary, metrics)
 
     report = {
         "file": csv_path,
@@ -156,6 +212,7 @@ def build_ops_report(csv_path):
         "focus_windows": windows,
         "temporal_trends": temporal_trends,
         "recommendations": recommendations,
+        "scorecard": scorecard,
     }
     return report
 
@@ -167,6 +224,7 @@ def render_ops_report(report):
     windows = report.get("focus_windows", {"best": [], "worst": []})
     temporal_trends = report.get("temporal_trends", {"by_day": {}, "by_week": {}})
     recommendations = report.get("recommendations", [])
+    scorecard = report.get("scorecard", {"score": 0.0, "status": "unknown", "checks": {}})
 
     def _baseline_line(label, baseline):
         if not baseline:
@@ -235,6 +293,14 @@ def render_ops_report(report):
         lines.append(f"- {rec}")
 
     lines.extend([
+        "",
+        "Session Scorecard",
+        f"- Goal score: {scorecard.get('score', 0.0) * 100:.1f}%",
+        f"- Status: {scorecard.get('status', 'unknown')}",
+        f"- Focus goal pass: {scorecard.get('checks', {}).get('focus_goal', {}).get('pass', False)}",
+        f"- Readiness goal pass: {scorecard.get('checks', {}).get('readiness_goal', {}).get('pass', False)}",
+        f"- Distracted-percent goal pass: {scorecard.get('checks', {}).get('distracted_pct_goal', {}).get('pass', False)}",
+        f"- Recovery goal pass: {scorecard.get('checks', {}).get('recovery_goal', {}).get('pass', False)}",
         "",
         f"Interpretation: {cog['interpretation']}",
     ])

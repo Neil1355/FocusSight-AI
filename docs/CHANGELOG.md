@@ -39,3 +39,7 @@
 - Extended `focussight/ops_report.py` with recommendation generation based on readiness, distraction patterns, trends, and window quality.
 - Extended operations report output to include focus windows, temporal trend coverage, and recommendation bullets.
 - Added regression tests for temporal summaries, focus windows, recommendation generation, and expanded ops report payload sections.
+- Added coaching reminder policies (`gentle`, `balanced`, `strict`) to tracker runtime with `--reminder-policy` CLI support.
+- Added sustained-distraction break suggestions in live tracker prompts and ops recommendations.
+- Added session goal scorecard generation in `focussight/ops_report.py` with focus/readiness/distraction/recovery checks.
+- Expanded tests for reminder timing helpers, policy resolution, and scorecard output.

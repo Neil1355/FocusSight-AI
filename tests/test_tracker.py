@@ -18,6 +18,9 @@ from focussight.tracker import (
     map_flipped_box_to_original,
     parse_session_tags,
     report_output_paths,
+    resolve_reminder_policy,
+    should_emit_reminder,
+    should_suggest_break,
     smooth_box,
     update_stability_seconds,
     tune_parameters_from_scores,
@@ -72,6 +75,27 @@ class FocusLogicTests(unittest.TestCase):
         self.assertEqual(normalized["camera_index"], 0)
         self.assertAlmostEqual(normalized["focused_threshold"], 0.95)
         self.assertAlmostEqual(normalized["alert_after_seconds"], 0.5)
+        self.assertEqual(normalized["reminder_policy"], "balanced")
+
+    def test_resolve_reminder_policy(self):
+        key, settings = resolve_reminder_policy("strict")
+        self.assertEqual(key, "strict")
+        self.assertIn("break_after_seconds", settings)
+
+        key_fallback, _ = resolve_reminder_policy("unknown")
+        self.assertEqual(key_fallback, "balanced")
+
+    def test_should_emit_reminder(self):
+        self.assertFalse(should_emit_reminder(10.0, None, None, 2.5, 15.0))
+        self.assertFalse(should_emit_reminder(10.0, 9.0, None, 2.5, 15.0))
+        self.assertTrue(should_emit_reminder(10.0, 5.0, None, 2.5, 15.0))
+        self.assertFalse(should_emit_reminder(30.0, 5.0, 20.0, 2.5, 15.0))
+        self.assertTrue(should_emit_reminder(36.0, 5.0, 20.0, 2.5, 15.0))
+
+    def test_should_suggest_break(self):
+        self.assertFalse(should_suggest_break(20.0, None, 60.0))
+        self.assertFalse(should_suggest_break(20.0, 0.0, 60.0))
+        self.assertTrue(should_suggest_break(61.0, 0.0, 60.0))
 
     def test_resolve_runtime_config_cli_overrides_profile(self):
         resolved = resolve_runtime_config(

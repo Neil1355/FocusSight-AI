@@ -20,11 +20,34 @@ ALERT_AFTER_SECONDS = 2.5
 MIN_TUNE_SAMPLES = 60
 CALIBRATION_MIN_FRAMES = 30
 DEFAULT_CAMERA_INDEX = 0
+DEFAULT_REMINDER_POLICY = "balanced"
+
+REMINDER_POLICIES = {
+    "gentle": {
+        "min_interval_seconds": 25.0,
+        "break_after_seconds": 90.0,
+        "message": "Gentle reminder: bring attention back",
+        "break_message": "Suggestion: take a short reset break",
+    },
+    "balanced": {
+        "min_interval_seconds": 15.0,
+        "break_after_seconds": 60.0,
+        "message": "Alert: refocus your eyes",
+        "break_message": "Suggestion: take a 2-minute break",
+    },
+    "strict": {
+        "min_interval_seconds": 8.0,
+        "break_after_seconds": 40.0,
+        "message": "Immediate correction needed: refocus now",
+        "break_message": "Suggestion: pause now for a quick reset",
+    },
+}
 
 DEFAULT_CONFIG = {
     "camera_index": DEFAULT_CAMERA_INDEX,
     "focused_threshold": FOCUSED_THRESHOLD,
     "alert_after_seconds": ALERT_AFTER_SECONDS,
+    "reminder_policy": DEFAULT_REMINDER_POLICY,
 }
 
 
@@ -53,11 +76,39 @@ def clamp(value, minimum, maximum):
 
 def normalize_config(config):
     """Clamp and normalize config values into safe runtime bounds."""
+    reminder_policy = str(config.get("reminder_policy", DEFAULT_REMINDER_POLICY)).strip().lower()
+    if reminder_policy not in REMINDER_POLICIES:
+        reminder_policy = DEFAULT_REMINDER_POLICY
     return {
         "camera_index": max(0, int(config.get("camera_index", DEFAULT_CAMERA_INDEX))),
         "focused_threshold": clamp(float(config.get("focused_threshold", FOCUSED_THRESHOLD)), 0.1, 0.95),
         "alert_after_seconds": clamp(float(config.get("alert_after_seconds", ALERT_AFTER_SECONDS)), 0.5, 10.0),
+        "reminder_policy": reminder_policy,
     }
+
+
+def resolve_reminder_policy(policy_name):
+    key = str(policy_name or DEFAULT_REMINDER_POLICY).strip().lower()
+    if key not in REMINDER_POLICIES:
+        key = DEFAULT_REMINDER_POLICY
+    return key, REMINDER_POLICIES[key]
+
+
+def should_emit_reminder(now, distracted_since, last_reminder_at, alert_after_seconds, min_interval_seconds):
+    if distracted_since is None:
+        return False
+    distracted_duration = now - distracted_since
+    if distracted_duration < alert_after_seconds:
+        return False
+    if last_reminder_at is None:
+        return True
+    return (now - last_reminder_at) >= min_interval_seconds
+
+
+def should_suggest_break(now, distracted_since, break_after_seconds):
+    if distracted_since is None:
+        return False
+    return (now - distracted_since) >= break_after_seconds
 
 
 def resolve_runtime_config(cli_values, profile_values):
@@ -411,6 +462,7 @@ def run_focus_tracker(
     task_tag="",
     context_tag="",
     location_tag="",
+    reminder_policy=DEFAULT_REMINDER_POLICY,
 ):
     face_cascade_local, eye_cascade_local, profile_face_cascade_local = ensure_cascades(face_xml, eye_xml)
     cap = cv2.VideoCapture(camera_index)
@@ -442,6 +494,7 @@ def run_focus_tracker(
     active_log_path = None
     generated_report_logs = set()
     session_tags = parse_session_tags(task_tag, context_tag, location_tag)
+    reminder_policy_key, reminder_settings = resolve_reminder_policy(reminder_policy)
 
     eye_stable_seconds = 0.0
     last_face_seen_time = time.time()
@@ -449,6 +502,9 @@ def run_focus_tracker(
     state_flip_timestamps = deque(maxlen=40)
     session_start_time = time.time()
     last_frame_time = None
+    last_reminder_at = None
+    active_prompt_text = ""
+    active_prompt_until = 0.0
 
     if logging_enabled:
         log_file_handle, log_writer, active_log_path = start_session_logger()
@@ -542,6 +598,8 @@ def run_focus_tracker(
 
             if state == "FOCUSED":
                 distracted_since = None
+                active_prompt_text = ""
+                active_prompt_until = 0.0
             elif distracted_since is None:
                 distracted_since = now
 
@@ -605,7 +663,7 @@ def run_focus_tracker(
             log_status = "ON" if logging_enabled else "OFF"
             cv2.putText(
                 frame,
-                f"Log [{log_status}]  Keys: L toggle log | T tune | Q quit",
+                f"Log [{log_status}]  Policy: {reminder_policy_key}  Keys: L toggle log | T tune | Q quit",
                 (20, 160),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.55,
@@ -613,10 +671,25 @@ def run_focus_tracker(
                 2,
             )
 
-            if distracted_since is not None and (now - distracted_since) >= alert_after_seconds:
+            if should_emit_reminder(
+                now,
+                distracted_since,
+                last_reminder_at,
+                alert_after_seconds,
+                reminder_settings["min_interval_seconds"],
+            ):
+                active_prompt_text = reminder_settings["message"]
+                active_prompt_until = max(active_prompt_until, now + 2.0)
+                last_reminder_at = now
+
+            if should_suggest_break(now, distracted_since, reminder_settings["break_after_seconds"]):
+                active_prompt_text = reminder_settings["break_message"]
+                active_prompt_until = max(active_prompt_until, now + 2.0)
+
+            if active_prompt_text and now <= active_prompt_until:
                 cv2.putText(
                     frame,
-                    "Alert: refocus your eyes",
+                    active_prompt_text,
                     (20, 190),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.8,
@@ -676,6 +749,7 @@ def run_focus_tracker(
         "camera_index": camera_index,
         "focused_threshold": focused_threshold,
         "alert_after_seconds": alert_after_seconds,
+        "reminder_policy": reminder_policy_key,
     }
 
 
@@ -696,6 +770,13 @@ def parse_args():
     parser.add_argument("--auto-report", action="store_true", help="Generate ops report when logging stops")
     parser.add_argument("--report-dir", type=str, default="reports", help="Directory for generated reports")
     parser.add_argument("--quiet", action="store_true", help="Reduce terminal output noise")
+    parser.add_argument(
+        "--reminder-policy",
+        type=str,
+        default=None,
+        choices=sorted(REMINDER_POLICIES.keys()),
+        help="Coaching reminder profile: gentle, balanced, or strict",
+    )
     parser.add_argument("--task-tag", type=str, default="", help="Optional task label (e.g., reading, coding)")
     parser.add_argument("--context-tag", type=str, default="", help="Optional context label (e.g., study, exam_prep)")
     parser.add_argument("--location-tag", type=str, default="", help="Optional location label (e.g., lab, library)")
@@ -709,6 +790,7 @@ def main():
         "camera_index": args.camera_index,
         "focused_threshold": args.threshold,
         "alert_after_seconds": args.alert_seconds,
+        "reminder_policy": args.reminder_policy,
     }
     runtime_config = resolve_runtime_config(cli_values, profile_values)
     final_config = run_focus_tracker(
@@ -723,6 +805,7 @@ def main():
         task_tag=args.task_tag,
         context_tag=args.context_tag,
         location_tag=args.location_tag,
+        reminder_policy=runtime_config["reminder_policy"],
     )
 
     if args.save_profile:

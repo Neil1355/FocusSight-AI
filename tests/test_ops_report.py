@@ -7,6 +7,7 @@ import csv
 from focussight.ops_report import (
     build_ops_report,
     build_recommendations,
+    build_session_scorecard,
     build_tag_comparison,
     derive_cog_sci_metrics,
     render_ops_report,
@@ -115,6 +116,22 @@ class OpsReportTests(unittest.TestCase):
         recs = build_recommendations(summary, cog, windows, trends)
         self.assertGreaterEqual(len(recs), 1)
 
+    def test_build_session_scorecard(self):
+        summary = {
+            "avg_focus": 0.8,
+            "distracted_pct": 20.0,
+        }
+        cog = {
+            "operational_readiness": 0.82,
+            "mean_recovery_seconds": 3.2,
+        }
+        scorecard = build_session_scorecard(summary, cog)
+        self.assertIn("score", scorecard)
+        self.assertIn("status", scorecard)
+        self.assertIn("checks", scorecard)
+        self.assertGreaterEqual(scorecard["score"], 0.0)
+        self.assertLessEqual(scorecard["score"], 1.0)
+
     def test_build_ops_report_contains_new_sections(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             os.makedirs(os.path.join(temp_dir, "logs"), exist_ok=True)
@@ -151,6 +168,7 @@ class OpsReportTests(unittest.TestCase):
             self.assertIn("focus_windows", report)
             self.assertIn("temporal_trends", report)
             self.assertIn("recommendations", report)
+            self.assertIn("scorecard", report)
 
 
 if __name__ == "__main__":

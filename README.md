@@ -24,6 +24,9 @@ FocusSight AI is a webcam-based focus tracker that detects face and eyes in real
 - Daily and weekly temporal trend aggregation from session logs
 - Best and worst focus windows extracted from timeline data
 - Actionable recommendation bullets generated from behavior and trend signals
+- Coaching reminder policies (`gentle`, `balanced`, `strict`) for runtime prompts
+- Break suggestions for sustained distraction streaks
+- Session goal scorecard in operations report output
 - Unit tests for core logic
 
 ## Project Structure
@@ -101,6 +104,10 @@ Run a short calibration before tracking:
 
 python -m focussight.tracker --calibrate-seconds 30
 
+Select coaching reminder policy:
+
+python -m focussight.tracker --reminder-policy strict
+
 Controls while running:
 
 - L: Toggle CSV logging on or off
@@ -156,6 +163,7 @@ The report includes:
 - Best and worst focus windows with time ranges and average focus
 - Daily and weekly trend counts based on available logs
 - Actionable recommendations generated from readiness, streaks, and trends
+- Session goal scorecard with pass/fail checks for focus, readiness, distraction, and recovery
 
 ## Run Tests
 

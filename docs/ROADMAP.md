@@ -39,15 +39,15 @@ Deliverables:
 - Add session tagging and baseline comparisons by task/context/location (completed)
 - Add recommendation generation from trends and cognitive signals (completed)
 
-## Phase 4: Coaching Layer
+## Phase 4: Coaching Layer (in progress)
 
 Goal: provide non-intrusive actionable coaching.
 
 Deliverables:
 
-- Add configurable reminder policies (gentle/strict)
-- Add break recommendations after sustained distracted streaks
-- Add session goals and scorecards
+- Add configurable reminder policies (gentle/strict) (completed)
+- Add break recommendations after sustained distracted streaks (completed)
+- Add session goals and scorecards (completed)
 
 ## Stepwise Execution Plan
 
