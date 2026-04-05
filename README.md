@@ -15,6 +15,7 @@ FocusSight AI is a webcam-based focus tracker that detects face and eyes in real
 - Runtime tuning from real session data
 - Phase 2 weighted signal quality scoring and status labels
 - Low-light and occlusion fallback labels for poor camera conditions
+- Frame-rate aware stability, FPS overlay, and elapsed-time logging
 - Post-session analytics script for recommendations
 - Unit tests for core logic
 
@@ -100,8 +101,10 @@ python session_summary.py
 This prints a summary for the latest log file, including:
 
 - Average focus percent
+- Average FPS
 - Distracted frame percent
 - Longest distracted streak (frames)
+- Longest distracted streak (seconds)
 - Recommended threshold and alert seconds
 
 ## Run Tests

@@ -5,6 +5,7 @@ import unittest
 
 from focussight.summary import (
     longest_distracted_streak,
+    longest_distracted_streak_seconds,
     summarize_file,
     tune_recommendation,
 )
@@ -21,6 +22,16 @@ class SessionSummaryTests(unittest.TestCase):
         ]
         self.assertEqual(longest_distracted_streak(rows), 2)
 
+    def test_longest_distracted_streak_seconds(self):
+        rows = [
+            {"state": "FOCUSED", "elapsed_seconds": 0.0},
+            {"state": "DISTRACTED", "elapsed_seconds": 0.2},
+            {"state": "DISTRACTED", "elapsed_seconds": 0.5},
+            {"state": "FOCUSED", "elapsed_seconds": 0.9},
+            {"state": "DISTRACTED", "elapsed_seconds": 1.4},
+        ]
+        self.assertAlmostEqual(longest_distracted_streak_seconds(rows), 0.3)
+
     def test_tune_recommendation(self):
         threshold, alert = tune_recommendation(0.9)
         self.assertAlmostEqual(threshold, 0.75)
@@ -34,6 +45,9 @@ class SessionSummaryTests(unittest.TestCase):
                 writer.writerow(
                     [
                         "timestamp",
+                        "elapsed_seconds",
+                        "frame_interval_seconds",
+                        "observed_fps",
                         "focus_score",
                         "state",
                         "face_found",
@@ -42,14 +56,16 @@ class SessionSummaryTests(unittest.TestCase):
                         "alert_after_seconds",
                     ]
                 )
-                writer.writerow(["2026-04-05T10:00:00", "0.90", "FOCUSED", 1, 1, "0.60", "2.50"])
-                writer.writerow(["2026-04-05T10:00:01", "0.20", "DISTRACTED", 1, 0, "0.60", "2.50"])
-                writer.writerow(["2026-04-05T10:00:02", "0.10", "DISTRACTED", 1, 0, "0.60", "2.50"])
+                writer.writerow(["2026-04-05T10:00:00", "0.0", "0.2", "5.0", "0.90", "FOCUSED", 1, 1, "0.60", "2.50"])
+                writer.writerow(["2026-04-05T10:00:01", "0.2", "0.2", "5.0", "0.20", "DISTRACTED", 1, 0, "0.60", "2.50"])
+                writer.writerow(["2026-04-05T10:00:02", "0.4", "0.2", "5.0", "0.10", "DISTRACTED", 1, 0, "0.60", "2.50"])
 
             summary = summarize_file(path)
             self.assertEqual(summary["rows"], 3)
             self.assertAlmostEqual(summary["avg_focus"], (0.9 + 0.2 + 0.1) / 3)
             self.assertEqual(summary["longest_distracted_streak_frames"], 2)
+            self.assertAlmostEqual(summary["avg_fps"], 5.0)
+            self.assertAlmostEqual(summary["longest_distracted_streak_seconds"], 0.2)
 
 
 if __name__ == "__main__":

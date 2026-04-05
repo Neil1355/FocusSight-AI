@@ -83,6 +83,21 @@ def smooth_box(boxes):
     return (sx // count, sy // count, sw // count, sh // count)
 
 
+def compute_observed_fps(frame_interval_seconds):
+    if frame_interval_seconds and frame_interval_seconds > 0:
+        return 1.0 / frame_interval_seconds
+    return 0.0
+
+
+def update_stability_seconds(stability_seconds, detected, delta_seconds, recovery_multiplier=1.0, decay_multiplier=2.0):
+    """Maintain a time-based stability window that is independent of frame rate."""
+    if delta_seconds <= 0:
+        return stability_seconds
+    if detected:
+        return min(1.5, stability_seconds + delta_seconds * recovery_multiplier)
+    return max(0.0, stability_seconds - delta_seconds * decay_multiplier)
+
+
 def compute_focus_score(history):
     """Compute rolling focus score from a deque of 0/1 samples."""
     return (sum(history) / len(history)) if history else 0.0
@@ -186,6 +201,9 @@ def start_session_logger(log_dir="logs"):
     writer.writerow(
         [
             "timestamp",
+            "elapsed_seconds",
+            "frame_interval_seconds",
+            "observed_fps",
             "focus_score",
             "weighted_focus_score",
             "state",
@@ -339,10 +357,12 @@ def run_focus_tracker(
     log_file_handle = None
     log_writer = None
 
-    eye_stable_frames = 0
+    eye_stable_seconds = 0.0
     last_face_seen_time = time.time()
     last_state = None
     state_flip_timestamps = deque(maxlen=40)
+    session_start_time = time.time()
+    last_frame_time = None
 
     if logging_enabled:
         log_file_handle, log_writer, active_log_path = start_session_logger()
@@ -351,6 +371,9 @@ def run_focus_tracker(
     try:
         while True:
             now = time.time()
+            frame_interval_seconds = 0.0 if last_frame_time is None else now - last_frame_time
+            last_frame_time = now
+            observed_fps = compute_observed_fps(frame_interval_seconds)
             ret, frame = cap.read()
             if not ret:
                 break
@@ -383,17 +406,14 @@ def run_focus_tracker(
             else:
                 face_history.clear()
 
-            if eye_found:
-                eye_stable_frames = min(30, eye_stable_frames + 1)
-            else:
-                eye_stable_frames = max(0, eye_stable_frames - 2)
+            eye_stable_seconds = update_stability_seconds(eye_stable_seconds, eye_found, frame_interval_seconds)
 
             focus_history.append(1 if face_found and eye_found else 0)
             raw_focus_score = compute_focus_score(focus_history)
             tuning_history.append(raw_focus_score)
 
             missing_face_seconds = max(0.0, now - last_face_seen_time)
-            eye_persistence = eye_stable_frames / 10.0
+            eye_persistence = clamp(eye_stable_seconds / 0.75, 0.0, 1.0)
             recent_flips = sum(1 for t in state_flip_timestamps if now - t <= 5.0)
             weighted_focus_score, signal_status = compute_signal_quality(
                 raw_focus_score,
@@ -419,6 +439,9 @@ def run_focus_tracker(
                 log_writer.writerow(
                     [
                         datetime.now().isoformat(timespec="seconds"),
+                        f"{now - session_start_time:.3f}",
+                        f"{frame_interval_seconds:.4f}",
+                        f"{observed_fps:.2f}",
                         f"{raw_focus_score:.4f}",
                         f"{weighted_focus_score:.4f}",
                         state,
@@ -450,7 +473,7 @@ def run_focus_tracker(
             )
             cv2.putText(
                 frame,
-                f"Signal: {signal_status}",
+                f"Signal: {signal_status}  FPS: {observed_fps:.1f}",
                 (20, 100),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.65,

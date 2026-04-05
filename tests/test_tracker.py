@@ -5,6 +5,7 @@ from collections import deque
 
 from focussight.tracker import (
     compute_focus_score,
+    compute_observed_fps,
     compute_signal_quality,
     derive_calibrated_config,
     evaluate_focus_state,
@@ -13,6 +14,7 @@ from focussight.tracker import (
     resolve_runtime_config,
     save_profile,
     smooth_box,
+    update_stability_seconds,
     tune_parameters_from_scores,
 )
 
@@ -145,6 +147,16 @@ class FocusLogicTests(unittest.TestCase):
         )
         self.assertEqual(status, "OCCLUDED")
         self.assertLess(weighted, 0.9)
+
+    def test_compute_observed_fps(self):
+        self.assertAlmostEqual(compute_observed_fps(0.2), 5.0)
+        self.assertEqual(compute_observed_fps(0.0), 0.0)
+
+    def test_update_stability_seconds(self):
+        stable = update_stability_seconds(0.1, True, 0.2)
+        decayed = update_stability_seconds(0.5, False, 0.2)
+        self.assertGreater(stable, 0.1)
+        self.assertLess(decayed, 0.5)
 
     def test_calibrated_config_requires_minimum_frames(self):
         threshold, alert_seconds, calibrated = derive_calibrated_config(
