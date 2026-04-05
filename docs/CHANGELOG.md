@@ -15,3 +15,6 @@
 - Added `README.md` with setup, run, controls, logging, summary, and test instructions.
 - Added `requirements.txt` with pinned project dependencies.
 - Added `setup.ps1` for one-command Windows environment setup and dependency installation.
+- Added `docs/ROADMAP.md` with phased innovation and delivery plan.
+- Added Phase 1 configuration foundation in `eye_test.py`: CLI options (`--camera-index`, `--threshold`, `--alert-seconds`, `--profile`, `--save-profile`, `--autolog`) and JSON profile load/save support.
+- Added tests for config normalization, CLI/profile precedence resolution, and profile persistence round-trip.

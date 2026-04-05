@@ -1,9 +1,15 @@
 import unittest
+import tempfile
+import os
 from collections import deque
 
 from eye_test import (
     compute_focus_score,
     evaluate_focus_state,
+    load_profile,
+    normalize_config,
+    resolve_runtime_config,
+    save_profile,
     smooth_box,
     tune_parameters_from_scores,
 )
@@ -45,6 +51,52 @@ class FocusLogicTests(unittest.TestCase):
         self.assertTrue(tuned)
         self.assertAlmostEqual(threshold, 0.75)
         self.assertAlmostEqual(alert_seconds, 1.8)
+
+    def test_normalize_config_clamps_values(self):
+        normalized = normalize_config(
+            {
+                "camera_index": -2,
+                "focused_threshold": 2.0,
+                "alert_after_seconds": 0.1,
+            }
+        )
+        self.assertEqual(normalized["camera_index"], 0)
+        self.assertAlmostEqual(normalized["focused_threshold"], 0.95)
+        self.assertAlmostEqual(normalized["alert_after_seconds"], 0.5)
+
+    def test_resolve_runtime_config_cli_overrides_profile(self):
+        resolved = resolve_runtime_config(
+            {
+                "camera_index": 1,
+                "focused_threshold": None,
+                "alert_after_seconds": 3.0,
+            },
+            {
+                "camera_index": 0,
+                "focused_threshold": 0.7,
+                "alert_after_seconds": 2.0,
+            },
+        )
+        self.assertEqual(resolved["camera_index"], 1)
+        self.assertAlmostEqual(resolved["focused_threshold"], 0.7)
+        self.assertAlmostEqual(resolved["alert_after_seconds"], 3.0)
+
+    def test_profile_save_and_load_roundtrip(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            profile_path = os.path.join(temp_dir, "profile.json")
+            save_profile(
+                profile_path,
+                {
+                    "camera_index": 2,
+                    "focused_threshold": 0.66,
+                    "alert_after_seconds": 2.2,
+                },
+            )
+
+            loaded = load_profile(profile_path)
+            self.assertEqual(loaded["camera_index"], 2)
+            self.assertAlmostEqual(loaded["focused_threshold"], 0.66)
+            self.assertAlmostEqual(loaded["alert_after_seconds"], 2.2)
 
 
 if __name__ == "__main__":

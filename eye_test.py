@@ -1,5 +1,7 @@
 import cv2
+import argparse
 import csv
+import json
 import os
 import urllib.request
 import time
@@ -13,10 +15,59 @@ eye_xml = 'haarcascade_eye.xml'
 FOCUSED_THRESHOLD = 0.6
 ALERT_AFTER_SECONDS = 2.5
 MIN_TUNE_SAMPLES = 60
+DEFAULT_CAMERA_INDEX = 0
+
+DEFAULT_CONFIG = {
+    "camera_index": DEFAULT_CAMERA_INDEX,
+    "focused_threshold": FOCUSED_THRESHOLD,
+    "alert_after_seconds": ALERT_AFTER_SECONDS,
+}
 
 
 def clamp(value, minimum, maximum):
     return max(minimum, min(value, maximum))
+
+
+def normalize_config(config):
+    """Clamp and normalize config values into safe runtime bounds."""
+    return {
+        "camera_index": max(0, int(config.get("camera_index", DEFAULT_CAMERA_INDEX))),
+        "focused_threshold": clamp(float(config.get("focused_threshold", FOCUSED_THRESHOLD)), 0.1, 0.95),
+        "alert_after_seconds": clamp(float(config.get("alert_after_seconds", ALERT_AFTER_SECONDS)), 0.5, 10.0),
+    }
+
+
+def resolve_runtime_config(cli_values, profile_values):
+    """Apply precedence: defaults < profile < CLI."""
+    merged = dict(DEFAULT_CONFIG)
+    merged.update(profile_values or {})
+    for key, value in (cli_values or {}).items():
+        if value is not None:
+            merged[key] = value
+    return normalize_config(merged)
+
+
+def load_profile(path):
+    """Load profile JSON. Returns normalized values or empty dict."""
+    if not path:
+        return {}
+    if not os.path.exists(path):
+        print(f"Profile not found at {path}. Using defaults/CLI.")
+        return {}
+    with open(path, "r", encoding="utf-8") as handle:
+        raw = json.load(handle)
+    if not isinstance(raw, dict):
+        raise ValueError("Profile JSON must contain an object.")
+    allowed = {k: raw[k] for k in DEFAULT_CONFIG if k in raw}
+    return normalize_config(allowed)
+
+
+def save_profile(path, config):
+    """Save normalized profile JSON."""
+    normalized = normalize_config(config)
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(normalized, handle, indent=2)
+    print(f"Saved profile: {path}")
 
 
 def smooth_box(boxes):
@@ -90,24 +141,31 @@ def ensure_cascades(face_path, eye_path):
     return face_cascade_local, eye_cascade_local
 
 
-def run_focus_tracker():
+def run_focus_tracker(
+    camera_index=DEFAULT_CAMERA_INDEX,
+    focused_threshold=FOCUSED_THRESHOLD,
+    alert_after_seconds=ALERT_AFTER_SECONDS,
+    auto_start_logging=False,
+):
     face_cascade_local, eye_cascade_local = ensure_cascades(face_xml, eye_xml)
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(camera_index)
 
     if not cap.isOpened():
-        raise RuntimeError("Could not open webcam (index 0).")
+        raise RuntimeError(f"Could not open webcam (index {camera_index}).")
 
     focus_history = deque(maxlen=20)
     tuning_history = deque(maxlen=900)
     face_history = deque(maxlen=8)
     distracted_since = None
-    focused_threshold = FOCUSED_THRESHOLD
-    alert_after_seconds = ALERT_AFTER_SECONDS
 
-    logging_enabled = False
+    logging_enabled = auto_start_logging
     log_file_handle = None
     log_writer = None
     active_log_path = None
+
+    if logging_enabled:
+        log_file_handle, log_writer, active_log_path = start_session_logger()
+        print(f"Logging started: {active_log_path}")
 
     try:
         while True:
@@ -255,7 +313,39 @@ def run_focus_tracker():
 
     cap.release()
     cv2.destroyAllWindows()
+    return {
+        "camera_index": camera_index,
+        "focused_threshold": focused_threshold,
+        "alert_after_seconds": alert_after_seconds,
+    }
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="FocusSight AI webcam focus tracker")
+    parser.add_argument("--camera-index", type=int, default=None, help="Camera index (default from config)")
+    parser.add_argument("--threshold", type=float, default=None, help="Focused threshold 0.1-0.95")
+    parser.add_argument("--alert-seconds", type=float, default=None, help="Alert delay in seconds 0.5-10")
+    parser.add_argument("--profile", type=str, default=None, help="Path to JSON profile to load")
+    parser.add_argument("--save-profile", type=str, default=None, help="Path to save JSON profile after run")
+    parser.add_argument("--autolog", action="store_true", help="Start logging immediately")
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    run_focus_tracker()
+    args = parse_args()
+    profile_values = load_profile(args.profile)
+    cli_values = {
+        "camera_index": args.camera_index,
+        "focused_threshold": args.threshold,
+        "alert_after_seconds": args.alert_seconds,
+    }
+    runtime_config = resolve_runtime_config(cli_values, profile_values)
+    final_config = run_focus_tracker(
+        camera_index=runtime_config["camera_index"],
+        focused_threshold=runtime_config["focused_threshold"],
+        alert_after_seconds=runtime_config["alert_after_seconds"],
+        auto_start_logging=args.autolog,
+    )
+
+    if args.save_profile:
+        save_profile(args.save_profile, final_config)
