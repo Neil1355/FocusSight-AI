@@ -15,6 +15,7 @@ eye_xml = "haarcascade_eye.xml"
 FOCUSED_THRESHOLD = 0.6
 ALERT_AFTER_SECONDS = 2.5
 MIN_TUNE_SAMPLES = 60
+CALIBRATION_MIN_FRAMES = 30
 DEFAULT_CAMERA_INDEX = 0
 
 DEFAULT_CONFIG = {
@@ -115,6 +116,35 @@ def compute_signal_quality(raw_focus_score, eye_persistence, missing_face_second
     return weighted_score, status_label
 
 
+def derive_calibrated_config(
+    raw_scores,
+    eye_persistence_scores,
+    face_presence_ratio,
+    current_threshold,
+    current_alert_seconds,
+):
+    """Derive personalized settings from calibration samples."""
+    if len(raw_scores) < CALIBRATION_MIN_FRAMES or face_presence_ratio < 0.5:
+        return current_threshold, current_alert_seconds, False
+
+    avg_focus = sum(raw_scores) / len(raw_scores)
+    avg_eye_persistence = sum(eye_persistence_scores) / len(eye_persistence_scores) if eye_persistence_scores else 0.0
+    score_variance = (
+        sum((score - avg_focus) ** 2 for score in raw_scores) / len(raw_scores)
+        if len(raw_scores) > 1
+        else 0.0
+    )
+    score_spread = score_variance ** 0.5
+
+    tuned_threshold = clamp(avg_focus - max(0.08, score_spread * 1.2), 0.45, 0.90)
+    tuned_alert_seconds = clamp(
+        1.5 + (1.0 - avg_focus) * 2.5 + (1.0 - avg_eye_persistence) * 1.5,
+        1.5,
+        5.0,
+    )
+    return tuned_threshold, tuned_alert_seconds, True
+
+
 def tune_parameters_from_scores(scores, current_threshold, current_alert_seconds):
     """Tune threshold and alert timing from observed focus scores."""
     if len(scores) < MIN_TUNE_SAMPLES:
@@ -149,6 +179,95 @@ def start_session_logger(log_dir="logs"):
     return file_handle, writer, log_path
 
 
+def run_calibration_phase(cap, face_cascade_local, eye_cascade_local, duration_seconds, current_threshold, current_alert_seconds):
+    """Capture a short calibration session and derive personalized settings."""
+    raw_scores = []
+    eye_persistence_scores = []
+    face_frames = 0
+    frames = 0
+    start_time = time.time()
+
+    print(
+        f"Calibration started for {duration_seconds:.1f}s. "
+        "Look at the camera normally, then press Q to skip."
+    )
+
+    while (time.time() - start_time) < duration_seconds:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        frames += 1
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade_local.detectMultiScale(gray, 1.3, 5)
+        face_found = len(faces) > 0
+        eye_found = False
+
+        if face_found:
+            face_frames += 1
+            xf, yf, wf, hf = max(faces, key=lambda f: f[2] * f[3])
+            roi_gray = gray[yf : yf + hf // 2, xf : xf + wf]
+            eyes = eye_cascade_local.detectMultiScale(roi_gray, 1.1, 10)
+            eye_found = len(eyes) > 0
+
+        raw_scores.append(1.0 if face_found and eye_found else 0.0)
+        eye_persistence_scores.append(1.0 if eye_found else 0.0)
+
+        cv2.putText(
+            frame,
+            "Calibration in progress",
+            (20, 35),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 255, 255),
+            2,
+        )
+        cv2.putText(
+            frame,
+            f"Frames: {frames}  Face coverage: {int((face_frames / max(frames, 1)) * 100)}%",
+            (20, 70),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (255, 255, 255),
+            2,
+        )
+        cv2.putText(
+            frame,
+            "Press Q to skip calibration",
+            (20, 100),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (230, 230, 230),
+            2,
+        )
+        cv2.imshow("FocusSight - Calibration", frame)
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q"):
+            break
+
+    face_presence_ratio = face_frames / max(frames, 1)
+    threshold, alert_seconds, calibrated = derive_calibrated_config(
+        raw_scores,
+        eye_persistence_scores,
+        face_presence_ratio,
+        current_threshold,
+        current_alert_seconds,
+    )
+
+    if calibrated:
+        print(
+            f"Calibration complete -> threshold={threshold:.2f}, alert={alert_seconds:.1f}s"
+        )
+    else:
+        print(
+            "Calibration skipped or insufficient. "
+            "Keeping existing threshold and alert timing."
+        )
+
+    cv2.destroyWindow("FocusSight - Calibration")
+    return threshold, alert_seconds, calibrated
+
+
 def ensure_cascades(face_path, eye_path):
     """Download cascades if missing and return initialized classifiers."""
     for xml in [face_path, eye_path]:
@@ -171,12 +290,25 @@ def run_focus_tracker(
     focused_threshold=FOCUSED_THRESHOLD,
     alert_after_seconds=ALERT_AFTER_SECONDS,
     auto_start_logging=False,
+    calibrate_seconds=0.0,
 ):
     face_cascade_local, eye_cascade_local = ensure_cascades(face_xml, eye_xml)
     cap = cv2.VideoCapture(camera_index)
 
     if not cap.isOpened():
         raise RuntimeError(f"Could not open webcam (index {camera_index}).")
+
+    if calibrate_seconds and calibrate_seconds > 0:
+        focused_threshold, alert_after_seconds, calibrated = run_calibration_phase(
+            cap,
+            face_cascade_local,
+            eye_cascade_local,
+            calibrate_seconds,
+            focused_threshold,
+            alert_after_seconds,
+        )
+        if calibrated:
+            print("Calibration values are now active for the session.")
 
     focus_history = deque(maxlen=20)
     tuning_history = deque(maxlen=900)
@@ -387,6 +519,12 @@ def parse_args():
     parser.add_argument("--alert-seconds", type=float, default=None, help="Alert delay in seconds 0.5-10")
     parser.add_argument("--profile", type=str, default=None, help="Path to JSON profile to load")
     parser.add_argument("--save-profile", type=str, default=None, help="Path to save JSON profile after run")
+    parser.add_argument(
+        "--calibrate-seconds",
+        type=float,
+        default=0.0,
+        help="Optional calibration duration before tracking begins",
+    )
     parser.add_argument("--autolog", action="store_true", help="Start logging immediately")
     return parser.parse_args()
 
@@ -405,6 +543,7 @@ def main():
         focused_threshold=runtime_config["focused_threshold"],
         alert_after_seconds=runtime_config["alert_after_seconds"],
         auto_start_logging=args.autolog,
+        calibrate_seconds=args.calibrate_seconds,
     )
 
     if args.save_profile:

@@ -21,4 +21,5 @@
 - Reorganized project layout into package structure: `focussight/tracker.py`, `focussight/summary.py`, and `tests/`.
 - Kept backward compatibility by converting root scripts `eye_test.py` and `session_summary.py` into wrappers.
 - Started Phase 2 signal quality model in tracker with weighted focus scoring, rapid-flip penalty, face-missing penalty, and status labels (`TRACKING_OK`, `LOW_CONFIDENCE`, `FACE_UNSTABLE`, `AWAY_FROM_CAMERA`, `NOISY_SIGNAL`).
+- Added calibration mode to personalize threshold and alert timing before tracking starts, with `--calibrate-seconds` support and test coverage for calibration math.
 - Expanded tests in `tests/test_tracker.py` and `tests/test_summary.py`, including new signal-quality behavior coverage.

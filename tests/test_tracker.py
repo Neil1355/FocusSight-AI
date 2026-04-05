@@ -6,6 +6,7 @@ from collections import deque
 from focussight.tracker import (
     compute_focus_score,
     compute_signal_quality,
+    derive_calibrated_config,
     evaluate_focus_state,
     load_profile,
     normalize_config,
@@ -118,6 +119,32 @@ class FocusLogicTests(unittest.TestCase):
         )
         self.assertEqual(status, "AWAY_FROM_CAMERA")
         self.assertLess(weighted, 0.9)
+
+    def test_calibrated_config_requires_minimum_frames(self):
+        threshold, alert_seconds, calibrated = derive_calibrated_config(
+            [1.0] * 10,
+            [1.0] * 10,
+            1.0,
+            0.6,
+            2.5,
+        )
+        self.assertFalse(calibrated)
+        self.assertEqual(threshold, 0.6)
+        self.assertEqual(alert_seconds, 2.5)
+
+    def test_calibrated_config_uses_sample_quality(self):
+        threshold, alert_seconds, calibrated = derive_calibrated_config(
+            [1.0] * 40,
+            [0.8] * 40,
+            0.95,
+            0.6,
+            2.5,
+        )
+        self.assertTrue(calibrated)
+        self.assertGreaterEqual(threshold, 0.45)
+        self.assertLessEqual(threshold, 0.90)
+        self.assertGreaterEqual(alert_seconds, 1.5)
+        self.assertLessEqual(alert_seconds, 5.0)
 
 
 if __name__ == "__main__":
