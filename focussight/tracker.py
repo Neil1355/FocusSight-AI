@@ -9,6 +9,8 @@ from datetime import datetime
 
 import cv2
 
+from .ops_report import build_ops_report, render_ops_report
+
 face_xml = "haarcascade_frontalface_default.xml"
 eye_xml = "haarcascade_eye.xml"
 
@@ -23,6 +25,11 @@ DEFAULT_CONFIG = {
     "focused_threshold": FOCUSED_THRESHOLD,
     "alert_after_seconds": ALERT_AFTER_SECONDS,
 }
+
+
+def log_info(message, quiet=False):
+    if not quiet:
+        print(message)
 
 
 def clamp(value, minimum, maximum):
@@ -217,7 +224,48 @@ def start_session_logger(log_dir="logs"):
     return file_handle, writer, log_path
 
 
-def run_calibration_phase(cap, face_cascade_local, eye_cascade_local, duration_seconds, current_threshold, current_alert_seconds):
+def report_output_paths(log_path, report_dir):
+    """Build deterministic report artifact paths from a log file path."""
+    base_name = os.path.splitext(os.path.basename(log_path))[0]
+    txt_path = os.path.join(report_dir, f"{base_name}_ops_report.txt")
+    json_path = os.path.join(report_dir, f"{base_name}_ops_report.json")
+    return txt_path, json_path
+
+
+def generate_ops_artifacts(log_path, report_dir="reports", save_json=True, quiet=False):
+    """Generate text/json cognitive-operations artifacts for a log file."""
+    if not log_path or not os.path.exists(log_path):
+        return None
+
+    os.makedirs(report_dir, exist_ok=True)
+    report = build_ops_report(log_path)
+    text = render_ops_report(report)
+    txt_path, json_path = report_output_paths(log_path, report_dir)
+
+    with open(txt_path, "w", encoding="utf-8") as handle:
+        handle.write(text)
+
+    result = {"txt_path": txt_path, "json_path": None}
+    if save_json:
+        with open(json_path, "w", encoding="utf-8") as handle:
+            json.dump(report, handle, indent=2)
+        result["json_path"] = json_path
+
+    log_info(f"Generated ops report: {txt_path}", quiet)
+    if result["json_path"]:
+        log_info(f"Generated ops report JSON: {json_path}", quiet)
+    return result
+
+
+def run_calibration_phase(
+    cap,
+    face_cascade_local,
+    eye_cascade_local,
+    duration_seconds,
+    current_threshold,
+    current_alert_seconds,
+    quiet=False,
+):
     """Capture a short calibration session and derive personalized settings."""
     raw_scores = []
     eye_persistence_scores = []
@@ -225,9 +273,10 @@ def run_calibration_phase(cap, face_cascade_local, eye_cascade_local, duration_s
     frames = 0
     start_time = time.time()
 
-    print(
+    log_info(
         f"Calibration started for {duration_seconds:.1f}s. "
-        "Look at the camera normally, then press Q to skip."
+        "Look at the camera normally, then press Q to skip.",
+        quiet,
     )
 
     while (time.time() - start_time) < duration_seconds:
@@ -293,13 +342,15 @@ def run_calibration_phase(cap, face_cascade_local, eye_cascade_local, duration_s
     )
 
     if calibrated:
-        print(
-            f"Calibration complete -> threshold={threshold:.2f}, alert={alert_seconds:.1f}s"
+        log_info(
+            f"Calibration complete -> threshold={threshold:.2f}, alert={alert_seconds:.1f}s",
+            quiet,
         )
     else:
-        print(
+        log_info(
             "Calibration skipped or insufficient. "
-            "Keeping existing threshold and alert timing."
+            "Keeping existing threshold and alert timing.",
+            quiet,
         )
 
     cv2.destroyWindow("FocusSight - Calibration")
@@ -329,6 +380,9 @@ def run_focus_tracker(
     alert_after_seconds=ALERT_AFTER_SECONDS,
     auto_start_logging=False,
     calibrate_seconds=0.0,
+    auto_report=False,
+    report_dir="reports",
+    quiet=False,
 ):
     face_cascade_local, eye_cascade_local = ensure_cascades(face_xml, eye_xml)
     cap = cv2.VideoCapture(camera_index)
@@ -344,9 +398,10 @@ def run_focus_tracker(
             calibrate_seconds,
             focused_threshold,
             alert_after_seconds,
+            quiet,
         )
         if calibrated:
-            print("Calibration values are now active for the session.")
+            log_info("Calibration values are now active for the session.", quiet)
 
     focus_history = deque(maxlen=20)
     tuning_history = deque(maxlen=900)
@@ -356,6 +411,8 @@ def run_focus_tracker(
     logging_enabled = auto_start_logging
     log_file_handle = None
     log_writer = None
+    active_log_path = None
+    generated_report_logs = set()
 
     eye_stable_seconds = 0.0
     last_face_seen_time = time.time()
@@ -366,7 +423,7 @@ def run_focus_tracker(
 
     if logging_enabled:
         log_file_handle, log_writer, active_log_path = start_session_logger()
-        print(f"Logging started: {active_log_path}")
+        log_info(f"Logging started: {active_log_path}", quiet)
 
     try:
         while True:
@@ -518,14 +575,17 @@ def run_focus_tracker(
                 if not logging_enabled:
                     log_file_handle, log_writer, active_log_path = start_session_logger()
                     logging_enabled = True
-                    print(f"Logging started: {active_log_path}")
+                    log_info(f"Logging started: {active_log_path}", quiet)
                 else:
                     logging_enabled = False
                     if log_file_handle is not None:
                         log_file_handle.close()
                     log_file_handle = None
                     log_writer = None
-                    print("Logging stopped")
+                    log_info("Logging stopped", quiet)
+                    if auto_report and active_log_path and active_log_path not in generated_report_logs:
+                        generate_ops_artifacts(active_log_path, report_dir=report_dir, quiet=quiet)
+                        generated_report_logs.add(active_log_path)
 
             if key == ord("t"):
                 focused_threshold, alert_after_seconds, tuned = tune_parameters_from_scores(
@@ -534,14 +594,16 @@ def run_focus_tracker(
                     alert_after_seconds,
                 )
                 if tuned:
-                    print(
+                    log_info(
                         f"Tuned from data -> threshold={focused_threshold:.2f}, "
-                        f"alert={alert_after_seconds:.1f}s"
+                        f"alert={alert_after_seconds:.1f}s",
+                        quiet,
                     )
                 else:
-                    print(
+                    log_info(
                         f"Need at least {MIN_TUNE_SAMPLES} focus samples before tuning "
-                        f"(current={len(tuning_history)})."
+                        f"(current={len(tuning_history)}).",
+                        quiet,
                     )
 
             if key == ord("q"):
@@ -549,6 +611,8 @@ def run_focus_tracker(
     finally:
         if log_file_handle is not None:
             log_file_handle.close()
+        if auto_report and active_log_path and active_log_path not in generated_report_logs:
+            generate_ops_artifacts(active_log_path, report_dir=report_dir, quiet=quiet)
 
     cap.release()
     cv2.destroyAllWindows()
@@ -573,6 +637,9 @@ def parse_args():
         help="Optional calibration duration before tracking begins",
     )
     parser.add_argument("--autolog", action="store_true", help="Start logging immediately")
+    parser.add_argument("--auto-report", action="store_true", help="Generate ops report when logging stops")
+    parser.add_argument("--report-dir", type=str, default="reports", help="Directory for generated reports")
+    parser.add_argument("--quiet", action="store_true", help="Reduce terminal output noise")
     return parser.parse_args()
 
 
@@ -591,6 +658,9 @@ def main():
         alert_after_seconds=runtime_config["alert_after_seconds"],
         auto_start_logging=args.autolog,
         calibrate_seconds=args.calibrate_seconds,
+        auto_report=args.auto_report,
+        report_dir=args.report_dir,
+        quiet=args.quiet,
     )
 
     if args.save_profile:

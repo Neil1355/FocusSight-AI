@@ -2,6 +2,7 @@ import os
 import tempfile
 import unittest
 from collections import deque
+import csv
 
 from focussight.tracker import (
     compute_focus_score,
@@ -13,6 +14,8 @@ from focussight.tracker import (
     normalize_config,
     resolve_runtime_config,
     save_profile,
+    generate_ops_artifacts,
+    report_output_paths,
     smooth_box,
     update_stability_seconds,
     tune_parameters_from_scores,
@@ -183,6 +186,45 @@ class FocusLogicTests(unittest.TestCase):
         self.assertLessEqual(threshold, 0.90)
         self.assertGreaterEqual(alert_seconds, 1.5)
         self.assertLessEqual(alert_seconds, 5.0)
+
+    def test_report_output_paths(self):
+        txt_path, json_path = report_output_paths("logs/focus_session_1.csv", "reports")
+        self.assertTrue(txt_path.endswith("focus_session_1_ops_report.txt"))
+        self.assertTrue(json_path.endswith("focus_session_1_ops_report.json"))
+
+    def test_generate_ops_artifacts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logs_dir = os.path.join(temp_dir, "logs")
+            reports_dir = os.path.join(temp_dir, "reports")
+            os.makedirs(logs_dir, exist_ok=True)
+            log_path = os.path.join(logs_dir, "focus_session_test.csv")
+
+            with open(log_path, "w", newline="", encoding="utf-8") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(
+                    [
+                        "timestamp",
+                        "elapsed_seconds",
+                        "frame_interval_seconds",
+                        "observed_fps",
+                        "focus_score",
+                        "weighted_focus_score",
+                        "state",
+                        "signal_status",
+                        "face_found",
+                        "eye_found",
+                        "focused_threshold",
+                        "alert_after_seconds",
+                    ]
+                )
+                writer.writerow(["2026-04-05T10:00:00", "0.0", "0.2", "5.0", "0.8", "0.7", "FOCUSED", "TRACKING_OK", 1, 1, "0.60", "2.50"])
+                writer.writerow(["2026-04-05T10:00:01", "0.2", "0.2", "5.0", "0.2", "0.2", "DISTRACTED", "LOW_CONFIDENCE", 1, 0, "0.60", "2.50"])
+
+            artifacts = generate_ops_artifacts(log_path, report_dir=reports_dir, quiet=True)
+            if artifacts is None:
+                self.fail("Expected generated artifacts but got None")
+            self.assertTrue(os.path.exists(artifacts["txt_path"]))
+            self.assertTrue(os.path.exists(artifacts["json_path"]))
 
 
 if __name__ == "__main__":

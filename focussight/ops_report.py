@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 from statistics import mean
 
@@ -108,6 +109,11 @@ def render_ops_report(report):
     return "\n".join(lines)
 
 
+def save_ops_report_json(report, path):
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(report, handle, indent=2)
+
+
 def latest_session_file(log_dir="logs"):
     summaries = summarize_directory(log_dir)
     if not summaries:
@@ -120,6 +126,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Generate cognitive-operations report for a FocusSight session")
     parser.add_argument("--file", type=str, default=None, help="Path to a specific session CSV")
     parser.add_argument("--save", type=str, default=None, help="Optional output path for report text")
+    parser.add_argument("--save-json", type=str, default=None, help="Optional output path for report JSON")
     return parser.parse_args()
 
 
@@ -138,6 +145,10 @@ def main():
         with open(args.save, "w", encoding="utf-8") as handle:
             handle.write(text)
         print(f"Saved report: {args.save}")
+
+    if args.save_json:
+        save_ops_report_json(report, args.save_json)
+        print(f"Saved report JSON: {args.save_json}")
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ FocusSight AI is a webcam-based focus tracker that detects face and eyes in real
 - JSON profile load/save for reusable personal settings
 - Optional calibration mode to personalize thresholds before tracking starts
 - Runtime logging toggle to save session data to CSV
+- Auto-generate operational reports when logging ends
 - Runtime tuning from real session data
 - Phase 2 weighted signal quality scoring and status labels
 - Low-light and occlusion fallback labels for poor camera conditions
@@ -79,6 +80,14 @@ Start with logging enabled:
 
 python eye_test.py --autolog
 
+Auto-generate report artifacts when logs end:
+
+python -m focussight.tracker --autolog --auto-report --report-dir reports
+
+Use quiet mode for cleaner terminal output:
+
+python -m focussight.tracker --quiet
+
 Run a short calibration before tracking:
 
 python -m focussight.tracker --calibrate-seconds 30
@@ -121,6 +130,10 @@ python ops_report.py
 Save report text to file:
 
 python -m focussight.ops_report --save reports/latest_ops_report.txt
+
+Save report JSON too:
+
+python -m focussight.ops_report --save-json reports/latest_ops_report.json
 
 The report includes:
 

@@ -26,5 +26,8 @@
 - Added frame-rate aware tracking: time-based eye stability, FPS overlay, and elapsed-time/frame-interval logging.
 - Extended session summaries to report average FPS and distracted streak duration in seconds when available.
 - Added cognitive operations reporting (`focussight/ops_report.py` and `ops_report.py`) with vigilance index, stability index, operational readiness, lapse counts, and recovery-time interpretation.
+- Added tracker-side auto-report generation on log stop/exit (`--auto-report`, `--report-dir`) producing text and JSON artifacts.
+- Added quiet runtime mode (`--quiet`) to reduce terminal spam during operations use.
+- Added JSON export support to ops report CLI (`--save-json`).
 - Expanded tests in `tests/test_tracker.py` and `tests/test_summary.py`, including new signal-quality behavior coverage.
 - Added `tests/test_ops_report.py` for cognitive operations report metrics/rendering.
