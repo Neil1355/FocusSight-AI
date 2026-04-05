@@ -95,17 +95,37 @@ def evaluate_focus_state(face_found, focus_score, threshold):
     return ("DISTRACTED", (0, 140, 255))
 
 
-def compute_signal_quality(raw_focus_score, eye_persistence, missing_face_seconds, rapid_flip_count):
-    """Phase 2 weighting: penalize noisy eyes, face loss, and rapid state flipping."""
+def compute_signal_quality(
+    raw_focus_score,
+    eye_persistence,
+    missing_face_seconds,
+    rapid_flip_count,
+    brightness_mean=None,
+    face_found=True,
+    eye_found=True,
+):
+    """Phase 2 weighting: penalize noisy eyes, face loss, low light, and rapid state flipping."""
     eye_weight = clamp(eye_persistence, 0.4, 1.0)
     face_weight = clamp(1.0 - (missing_face_seconds / 2.0), 0.3, 1.0)
     flip_weight = clamp(1.0 - (rapid_flip_count * 0.08), 0.55, 1.0)
-    weighted_score = clamp(raw_focus_score * eye_weight * face_weight * flip_weight, 0.0, 1.0)
+    brightness_weight = 1.0
+    if brightness_mean is not None:
+        brightness_weight = clamp((float(brightness_mean) - 35.0) / 90.0, 0.25, 1.0)
 
-    if missing_face_seconds >= 2.0:
+    weighted_score = clamp(
+        raw_focus_score * eye_weight * face_weight * flip_weight * brightness_weight,
+        0.0,
+        1.0,
+    )
+
+    if brightness_mean is not None and brightness_mean < 55.0:
+        status_label = "LOW_LIGHT"
+    elif missing_face_seconds >= 2.0:
         status_label = "AWAY_FROM_CAMERA"
     elif missing_face_seconds >= 0.8:
         status_label = "FACE_UNSTABLE"
+    elif face_found and not eye_found and eye_persistence < 0.55:
+        status_label = "OCCLUDED"
     elif eye_persistence < 0.55:
         status_label = "LOW_CONFIDENCE"
     elif rapid_flip_count >= 4:
@@ -336,6 +356,7 @@ def run_focus_tracker(
                 break
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            brightness_mean = float(gray.mean())
 
             faces = face_cascade_local.detectMultiScale(gray, 1.3, 5)
             face_found = len(faces) > 0
@@ -379,6 +400,9 @@ def run_focus_tracker(
                 eye_persistence,
                 missing_face_seconds,
                 recent_flips,
+                brightness_mean,
+                face_found,
+                eye_found,
             )
 
             state, state_color = evaluate_focus_state(face_found, weighted_focus_score, focused_threshold)

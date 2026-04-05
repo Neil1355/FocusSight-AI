@@ -23,8 +23,8 @@ Deliverables:
 
 - Add confidence weighting from eye box stability and persistence
 - Track missing-face time and rapid state flips
-- Add low-light and occlusion fallback status labels
 - Add calibration mode to personalize focus thresholds before tracking
+- Add low-light and occlusion fallback status labels
 
 ## Phase 3: Analytics and Insights
 

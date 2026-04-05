@@ -14,6 +14,7 @@ FocusSight AI is a webcam-based focus tracker that detects face and eyes in real
 - Runtime logging toggle to save session data to CSV
 - Runtime tuning from real session data
 - Phase 2 weighted signal quality scoring and status labels
+- Low-light and occlusion fallback labels for poor camera conditions
 - Post-session analytics script for recommendations
 - Unit tests for core logic
 

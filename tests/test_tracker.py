@@ -120,6 +120,32 @@ class FocusLogicTests(unittest.TestCase):
         self.assertEqual(status, "AWAY_FROM_CAMERA")
         self.assertLess(weighted, 0.9)
 
+    def test_signal_quality_detects_low_light(self):
+        weighted, status = compute_signal_quality(
+            raw_focus_score=0.9,
+            eye_persistence=1.0,
+            missing_face_seconds=0.0,
+            rapid_flip_count=0,
+            brightness_mean=35.0,
+            face_found=True,
+            eye_found=True,
+        )
+        self.assertEqual(status, "LOW_LIGHT")
+        self.assertLess(weighted, 0.9)
+
+    def test_signal_quality_detects_occlusion(self):
+        weighted, status = compute_signal_quality(
+            raw_focus_score=0.9,
+            eye_persistence=0.3,
+            missing_face_seconds=0.2,
+            rapid_flip_count=0,
+            brightness_mean=120.0,
+            face_found=True,
+            eye_found=False,
+        )
+        self.assertEqual(status, "OCCLUDED")
+        self.assertLess(weighted, 0.9)
+
     def test_calibrated_config_requires_minimum_frames(self):
         threshold, alert_seconds, calibrated = derive_calibrated_config(
             [1.0] * 10,
