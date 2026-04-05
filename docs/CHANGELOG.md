@@ -13,3 +13,5 @@
 - Added `session_summary.py` to analyze session CSV files and report average focus, distracted percentage, longest distracted streak, and tuning recommendations.
 - Added `test_session_summary.py` with unit tests for streak calculation, tuning recommendation math, and file-level summary output.
 - Added `README.md` with setup, run, controls, logging, summary, and test instructions.
+- Added `requirements.txt` with pinned project dependencies.
+- Added `setup.ps1` for one-command Windows environment setup and dependency installation.

@@ -19,6 +19,8 @@ FocusSight AI is a webcam-based focus tracker that detects face and eyes in real
 - session_summary.py: Post-session CSV analytics tool
 - test_eye_test.py: Unit tests for tracking logic helpers
 - test_session_summary.py: Unit tests for analytics helpers
+- requirements.txt: Python dependencies
+- setup.ps1: One-command Windows environment bootstrap
 - docs/CHANGELOG.md: Change history
 
 ## Requirements
@@ -29,15 +31,21 @@ FocusSight AI is a webcam-based focus tracker that detects face and eyes in real
 
 ## Setup
 
+Windows one-command setup:
+
+powershell -ExecutionPolicy Bypass -File .\setup.ps1
+
+Manual setup:
+
 1. Create and activate a virtual environment.
-2. Install dependencies.
+2. Install dependencies from requirements.txt.
 
 PowerShell example:
 
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install opencv-python
+python -m pip install -r requirements.txt
 
 ## Run Focus Tracker
 
