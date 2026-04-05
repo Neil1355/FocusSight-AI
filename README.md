@@ -21,6 +21,9 @@ FocusSight AI is a webcam-based focus tracker that detects face and eyes in real
 - Improved robustness for hats/head tilt using profile-face fallback and contrast-normalized detection
 - Post-session analytics script for recommendations
 - Cognitive operations report with vigilance, stability, and readiness indices
+- Daily and weekly temporal trend aggregation from session logs
+- Best and worst focus windows extracted from timeline data
+- Actionable recommendation bullets generated from behavior and trend signals
 - Unit tests for core logic
 
 ## Project Structure
@@ -150,6 +153,9 @@ The report includes:
 - Mean recovery time
 - A practical interpretation line for field use
 - Baseline comparisons for matching task/context/location tags
+- Best and worst focus windows with time ranges and average focus
+- Daily and weekly trend counts based on available logs
+- Actionable recommendations generated from readiness, streaks, and trends
 
 ## Run Tests
 

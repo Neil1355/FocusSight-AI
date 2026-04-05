@@ -34,3 +34,8 @@
 - Improved face robustness for real-world usage (hats and head tilt) by adding profile-face cascade fallback, flipped-profile mapping, histogram-equalized preprocessing, and wider eye-search fallback.
 - Expanded tests in `tests/test_tracker.py` and `tests/test_summary.py`, including new signal-quality behavior coverage.
 - Added `tests/test_ops_report.py` for cognitive operations report metrics/rendering.
+- Added temporal analytics helpers in `focussight/summary.py` for per-day and per-week trend summaries.
+- Added focus-window extraction in `focussight/summary.py` to identify best and worst timeline windows by average focus.
+- Extended `focussight/ops_report.py` with recommendation generation based on readiness, distraction patterns, trends, and window quality.
+- Extended operations report output to include focus windows, temporal trend coverage, and recommendation bullets.
+- Added regression tests for temporal summaries, focus windows, recommendation generation, and expanded ops report payload sections.

@@ -1,6 +1,7 @@
 import csv
 import glob
 import os
+from datetime import datetime
 
 
 def clamp(value, minimum, maximum):
@@ -26,6 +27,15 @@ def _parse_state(value):
     if state in {"FOCUSED", "DISTRACTED"}:
         return state
     return None
+
+
+def _parse_timestamp(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
 
 
 def load_session_rows(csv_path):
@@ -192,6 +202,82 @@ def summarize_directory_with_tags(log_dir="logs"):
         "by_context_tag": summarize_by_tag(all_rows, "context_tag"),
         "by_location_tag": summarize_by_tag(all_rows, "location_tag"),
     }
+
+
+def summarize_by_day(rows):
+    grouped = {}
+    for row in rows:
+        ts = _parse_timestamp(row.get("timestamp"))
+        day_key = ts.date().isoformat() if ts else "unspecified"
+        grouped.setdefault(day_key, []).append(row)
+    return {day: summarize_rows(day_rows) for day, day_rows in grouped.items()}
+
+
+def summarize_by_week(rows):
+    grouped = {}
+    for row in rows:
+        ts = _parse_timestamp(row.get("timestamp"))
+        if ts:
+            iso_year, iso_week, _ = ts.isocalendar()
+            week_key = f"{iso_year}-W{iso_week:02d}"
+        else:
+            week_key = "unspecified"
+        grouped.setdefault(week_key, []).append(row)
+    return {week: summarize_rows(week_rows) for week, week_rows in grouped.items()}
+
+
+def summarize_directory_temporal(log_dir="logs"):
+    pattern = os.path.join(log_dir, "focus_session_*.csv")
+    files = sorted(glob.glob(pattern))
+    all_rows = []
+    for file_path in files:
+        all_rows.extend(load_session_rows(file_path))
+
+    return {
+        "total_sessions": len(files),
+        "by_day": summarize_by_day(all_rows),
+        "by_week": summarize_by_week(all_rows),
+    }
+
+
+def extract_focus_windows(rows, window_seconds=12.0, top_n=3):
+    """Find best and worst focus windows using elapsed-time rolling windows."""
+    timeline = [row for row in rows if row.get("elapsed_seconds") is not None]
+    if len(timeline) < 2:
+        return {"best": [], "worst": []}
+
+    windows = []
+    n = len(timeline)
+    end = 0
+    running_sum = 0.0
+
+    for start in range(n):
+        start_elapsed = timeline[start]["elapsed_seconds"]
+        if end < start:
+            end = start
+            running_sum = 0.0
+
+        while end < n and (timeline[end]["elapsed_seconds"] - start_elapsed) <= window_seconds:
+            running_sum += timeline[end]["focus_score"]
+            end += 1
+
+        count = end - start
+        if count >= 2:
+            avg_focus = running_sum / count
+            windows.append(
+                {
+                    "start_seconds": timeline[start]["elapsed_seconds"],
+                    "end_seconds": timeline[end - 1]["elapsed_seconds"],
+                    "avg_focus": avg_focus,
+                    "samples": count,
+                }
+            )
+
+        running_sum -= timeline[start]["focus_score"]
+
+    best = sorted(windows, key=lambda w: w["avg_focus"], reverse=True)[:top_n]
+    worst = sorted(windows, key=lambda w: w["avg_focus"])[:top_n]
+    return {"best": best, "worst": worst}
 
 
 def print_report(summary):

@@ -2,8 +2,16 @@ import unittest
 import tempfile
 import os
 import json
+import csv
 
-from focussight.ops_report import derive_cog_sci_metrics, render_ops_report, save_ops_report_json, build_tag_comparison
+from focussight.ops_report import (
+    build_ops_report,
+    build_recommendations,
+    build_tag_comparison,
+    derive_cog_sci_metrics,
+    render_ops_report,
+    save_ops_report_json,
+)
 
 
 class OpsReportTests(unittest.TestCase):
@@ -83,6 +91,66 @@ class OpsReportTests(unittest.TestCase):
         self.assertEqual(comparison["task_tag"], "coding")
         self.assertEqual(comparison["context_tag"], "study")
         self.assertEqual(comparison["location_tag"], "lab")
+
+    def test_build_recommendations(self):
+        summary = {
+            "avg_focus": 0.45,
+            "avg_fps": 5.0,
+            "distracted_pct": 55.0,
+            "longest_distracted_streak_seconds": 50.0,
+        }
+        cog = {
+            "operational_readiness": 0.5,
+        }
+        windows = {
+            "best": [{"start_seconds": 10.0, "end_seconds": 20.0, "avg_focus": 0.75}],
+            "worst": [],
+        }
+        trends = {
+            "by_day": {
+                "2026-04-01": {"avg_focus": 0.8},
+                "2026-04-02": {"avg_focus": 0.6},
+            }
+        }
+        recs = build_recommendations(summary, cog, windows, trends)
+        self.assertGreaterEqual(len(recs), 1)
+
+    def test_build_ops_report_contains_new_sections(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.makedirs(os.path.join(temp_dir, "logs"), exist_ok=True)
+            log_path = os.path.join(temp_dir, "logs", "focus_session_test.csv")
+            with open(log_path, "w", newline="", encoding="utf-8") as handle:
+                writer = csv.writer(handle)
+                writer.writerow([
+                    "timestamp",
+                    "elapsed_seconds",
+                    "frame_interval_seconds",
+                    "observed_fps",
+                    "focus_score",
+                    "weighted_focus_score",
+                    "state",
+                    "signal_status",
+                    "face_found",
+                    "eye_found",
+                    "focused_threshold",
+                    "alert_after_seconds",
+                    "task_tag",
+                    "context_tag",
+                    "location_tag",
+                ])
+                writer.writerow(["2026-04-01T10:00:00", "0.0", "0.2", "5.0", "0.8", "0.7", "FOCUSED", "TRACKING_OK", 1, 1, "0.6", "2.5", "coding", "study", "lab"])
+                writer.writerow(["2026-04-01T10:00:01", "1.0", "0.2", "5.0", "0.2", "0.2", "DISTRACTED", "LOW_CONFIDENCE", 1, 0, "0.6", "2.5", "coding", "study", "lab"])
+
+            cwd = os.getcwd()
+            try:
+                os.chdir(temp_dir)
+                report = build_ops_report(log_path)
+            finally:
+                os.chdir(cwd)
+
+            self.assertIn("focus_windows", report)
+            self.assertIn("temporal_trends", report)
+            self.assertIn("recommendations", report)
 
 
 if __name__ == "__main__":

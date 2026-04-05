@@ -3,7 +3,14 @@ import json
 import os
 from statistics import mean
 
-from .summary import load_session_rows, summarize_directory, summarize_directory_with_tags, summarize_file
+from .summary import (
+    extract_focus_windows,
+    load_session_rows,
+    summarize_directory,
+    summarize_directory_temporal,
+    summarize_directory_with_tags,
+    summarize_file,
+)
 
 
 def _clip(value, minimum=0.0, maximum=1.0):
@@ -99,17 +106,56 @@ def build_tag_comparison(rows, log_dir="logs"):
     }
 
 
+def build_recommendations(summary, cog_metrics, windows, temporal_trends):
+    recommendations = []
+
+    if cog_metrics["operational_readiness"] < 0.6:
+        recommendations.append("Schedule a 5-10 minute reset before the next high-load task.")
+    if summary["longest_distracted_streak_seconds"] >= 45:
+        recommendations.append("Use shorter work intervals with more frequent check-ins.")
+    if summary["avg_fps"] and summary["avg_fps"] < 6.0:
+        recommendations.append("Camera FPS is low; improve lighting or reduce camera load for cleaner signals.")
+
+    best_windows = windows.get("best", [])
+    if best_windows:
+        top = best_windows[0]
+        recommendations.append(
+            f"Strongest focus window appeared around {top['start_seconds']:.0f}-{top['end_seconds']:.0f}s; schedule demanding work near similar conditions."
+        )
+
+    by_day = temporal_trends.get("by_day", {})
+    if len(by_day) >= 2:
+        ordered = sorted(by_day.items(), key=lambda item: item[0])
+        first = ordered[0][1]["avg_focus"]
+        last = ordered[-1][1]["avg_focus"]
+        if last < first - 0.05:
+            recommendations.append("Daily focus trend is declining; reduce workload density and add recovery windows.")
+        elif last > first + 0.05:
+            recommendations.append("Daily focus trend is improving; maintain current routine and calibration cadence.")
+
+    if not recommendations:
+        recommendations.append("Current session profile is stable; continue with present workflow and monitoring.")
+
+    return recommendations
+
+
 def build_ops_report(csv_path):
     summary = summarize_file(csv_path)
     rows = load_session_rows(csv_path)
     metrics = derive_cog_sci_metrics(summary, rows)
     comparison = build_tag_comparison(rows)
+    windows = extract_focus_windows(rows)
+    temporal_trends = summarize_directory_temporal("logs")
+    recommendations = build_recommendations(summary, metrics, windows, temporal_trends)
 
     report = {
         "file": csv_path,
         "summary": summary,
         "cog_sci": metrics,
         "comparison": comparison,
+        "focus_windows": windows,
+        "temporal_trends": temporal_trends,
+        "recommendations": recommendations,
     }
     return report
 
@@ -118,6 +164,9 @@ def render_ops_report(report):
     summary = report["summary"]
     cog = report["cog_sci"]
     comparison = report.get("comparison", {})
+    windows = report.get("focus_windows", {"best": [], "worst": []})
+    temporal_trends = report.get("temporal_trends", {"by_day": {}, "by_week": {}})
+    recommendations = report.get("recommendations", [])
 
     def _baseline_line(label, baseline):
         if not baseline:
@@ -152,8 +201,43 @@ def render_ops_report(report):
         _baseline_line("Context baseline", comparison.get("context_baseline")),
         _baseline_line("Location baseline", comparison.get("location_baseline")),
         "",
-        f"Interpretation: {cog['interpretation']}",
+        "Focus Windows",
     ]
+
+    best_windows = windows.get("best", [])
+    worst_windows = windows.get("worst", [])
+    if best_windows:
+        top_best = best_windows[0]
+        lines.append(
+            f"- Best window: {top_best['start_seconds']:.0f}-{top_best['end_seconds']:.0f}s at {top_best['avg_focus'] * 100:.1f}% focus"
+        )
+    else:
+        lines.append("- Best window: insufficient elapsed-time data")
+
+    if worst_windows:
+        top_worst = worst_windows[0]
+        lines.append(
+            f"- Worst window: {top_worst['start_seconds']:.0f}-{top_worst['end_seconds']:.0f}s at {top_worst['avg_focus'] * 100:.1f}% focus"
+        )
+    else:
+        lines.append("- Worst window: insufficient elapsed-time data")
+
+    lines.extend([
+        "",
+        "Temporal Trends",
+        f"- Days tracked: {len(temporal_trends.get('by_day', {}))}",
+        f"- Weeks tracked: {len(temporal_trends.get('by_week', {}))}",
+        "",
+        "Recommendations",
+    ])
+
+    for rec in recommendations:
+        lines.append(f"- {rec}")
+
+    lines.extend([
+        "",
+        f"Interpretation: {cog['interpretation']}",
+    ])
     return "\n".join(lines)
 
 

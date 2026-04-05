@@ -15,7 +15,7 @@ Deliverables:
 - Keep existing keyboard controls for logging and tuning
 - Extend tests to cover profile and config behavior
 
-## Phase 2: Better Signal Quality (in progress)
+## Phase 2: Better Signal Quality (completed)
 
 Goal: improve focus quality beyond binary eye-detection.
 
@@ -33,10 +33,11 @@ Goal: make session logs useful for self-improvement.
 Deliverables:
 
 - Add aggregate summaries across all sessions
-- Add daily/weekly trend output (CSV or JSON)
-- Add "best focus window" and "most distracted window" metrics
-- Add cognitive-operations interpretation layer (vigilance, stability, readiness)
-- Add session tagging and baseline comparisons by task/context/location
+- Add daily/weekly trend output (CSV or JSON) (completed)
+- Add "best focus window" and "most distracted window" metrics (completed)
+- Add cognitive-operations interpretation layer (vigilance, stability, readiness) (completed)
+- Add session tagging and baseline comparisons by task/context/location (completed)
+- Add recommendation generation from trends and cognitive signals (completed)
 
 ## Phase 4: Coaching Layer
 
