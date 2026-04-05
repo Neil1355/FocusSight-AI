@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 
-from session_summary import (
+from focussight.summary import (
     longest_distracted_streak,
     summarize_file,
     tune_recommendation,
@@ -31,15 +31,17 @@ class SessionSummaryTests(unittest.TestCase):
             path = os.path.join(temp_dir, "focus_session_test.csv")
             with open(path, "w", newline="", encoding="utf-8") as handle:
                 writer = csv.writer(handle)
-                writer.writerow([
-                    "timestamp",
-                    "focus_score",
-                    "state",
-                    "face_found",
-                    "eye_found",
-                    "focused_threshold",
-                    "alert_after_seconds",
-                ])
+                writer.writerow(
+                    [
+                        "timestamp",
+                        "focus_score",
+                        "state",
+                        "face_found",
+                        "eye_found",
+                        "focused_threshold",
+                        "alert_after_seconds",
+                    ]
+                )
                 writer.writerow(["2026-04-05T10:00:00", "0.90", "FOCUSED", 1, 1, "0.60", "2.50"])
                 writer.writerow(["2026-04-05T10:00:01", "0.20", "DISTRACTED", 1, 0, "0.60", "2.50"])
                 writer.writerow(["2026-04-05T10:00:02", "0.10", "DISTRACTED", 1, 0, "0.60", "2.50"])

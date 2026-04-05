@@ -12,17 +12,21 @@ FocusSight AI is a webcam-based focus tracker that detects face and eyes in real
 - JSON profile load/save for reusable personal settings
 - Runtime logging toggle to save session data to CSV
 - Runtime tuning from real session data
+- Phase 2 weighted signal quality scoring and status labels
 - Post-session analytics script for recommendations
 - Unit tests for core logic
 
-## Project Files
+## Project Structure
 
-- eye_test.py: Main webcam tracker app
-- session_summary.py: Post-session CSV analytics tool
-- test_eye_test.py: Unit tests for tracking logic helpers
-- test_session_summary.py: Unit tests for analytics helpers
+- focussight/tracker.py: Core tracker logic
+- focussight/summary.py: Session analytics logic
+- eye_test.py: Backward-compatible tracker launcher wrapper
+- session_summary.py: Backward-compatible summary launcher wrapper
+- tests/test_tracker.py: Tracker and config unit tests
+- tests/test_summary.py: Summary and recommendation unit tests
 - requirements.txt: Python dependencies
 - setup.ps1: One-command Windows environment bootstrap
+- docs/ROADMAP.md: Innovation roadmap and phase plan
 - docs/CHANGELOG.md: Change history
 
 ## Requirements
@@ -51,6 +55,10 @@ python -m pip install -r requirements.txt
 
 ## Run Focus Tracker
 
+python -m focussight.tracker
+
+Backward-compatible command:
+
 python eye_test.py
 
 With custom runtime settings:
@@ -77,6 +85,10 @@ When logging is on, files are created in logs/ with names like:
 
 ## Run Session Summary
 
+python -m focussight.summary
+
+Backward-compatible command:
+
 python session_summary.py
 
 This prints a summary for the latest log file, including:
@@ -88,7 +100,7 @@ This prints a summary for the latest log file, including:
 
 ## Run Tests
 
-python -m unittest -v
+python -m unittest discover -s tests -v
 
 ## Notes
 

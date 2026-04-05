@@ -4,7 +4,7 @@
 
 Evolve FocusSight from a demo detector into a practical personal focus assistant with reliable tracking, calibration, trends, and actionable feedback.
 
-## Phase 1: Usability and Configuration (now)
+## Phase 1: Usability and Configuration (completed)
 
 Goal: make the app easier to run, tune, and personalize.
 
@@ -15,7 +15,7 @@ Deliverables:
 - Keep existing keyboard controls for logging and tuning
 - Extend tests to cover profile and config behavior
 
-## Phase 2: Better Signal Quality
+## Phase 2: Better Signal Quality (in progress)
 
 Goal: improve focus quality beyond binary eye-detection.
 
@@ -47,9 +47,8 @@ Deliverables:
 
 ## Stepwise Execution Plan
 
-1. Implement Phase 1 config/profile foundation.
-2. Validate with tests and update docs.
-3. Release and collect sample logs.
-4. Use real logs to guide Phase 2 metric design.
-5. Build Phase 3 aggregation on top of stable logs.
-6. Add coaching logic only after metric confidence is acceptable.
+1. Complete Phase 2 fallback labels and reliability metrics.
+2. Validate with tests and update docs/changelog.
+3. Release and collect sample logs with weighted scoring.
+4. Build Phase 3 aggregation on top of richer session logs.
+5. Add coaching logic only after metric confidence is acceptable.

@@ -18,3 +18,7 @@
 - Added `docs/ROADMAP.md` with phased innovation and delivery plan.
 - Added Phase 1 configuration foundation in `eye_test.py`: CLI options (`--camera-index`, `--threshold`, `--alert-seconds`, `--profile`, `--save-profile`, `--autolog`) and JSON profile load/save support.
 - Added tests for config normalization, CLI/profile precedence resolution, and profile persistence round-trip.
+- Reorganized project layout into package structure: `focussight/tracker.py`, `focussight/summary.py`, and `tests/`.
+- Kept backward compatibility by converting root scripts `eye_test.py` and `session_summary.py` into wrappers.
+- Started Phase 2 signal quality model in tracker with weighted focus scoring, rapid-flip penalty, face-missing penalty, and status labels (`TRACKING_OK`, `LOW_CONFIDENCE`, `FACE_UNSTABLE`, `AWAY_FROM_CAMERA`, `NOISY_SIGNAL`).
+- Expanded tests in `tests/test_tracker.py` and `tests/test_summary.py`, including new signal-quality behavior coverage.

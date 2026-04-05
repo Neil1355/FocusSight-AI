@@ -20,4 +20,4 @@ Write-Host "[3/4] Installing dependencies from requirements.txt"
 
 Write-Host "[4/4] Setup complete"
 Write-Host "Run the app with:"
-Write-Host "& $pythonExe eye_test.py"
+Write-Host "& $pythonExe -m focussight.tracker"

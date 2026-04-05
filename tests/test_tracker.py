@@ -1,10 +1,11 @@
-import unittest
-import tempfile
 import os
+import tempfile
+import unittest
 from collections import deque
 
-from eye_test import (
+from focussight.tracker import (
     compute_focus_score,
+    compute_signal_quality,
     evaluate_focus_state,
     load_profile,
     normalize_config,
@@ -97,6 +98,26 @@ class FocusLogicTests(unittest.TestCase):
             self.assertEqual(loaded["camera_index"], 2)
             self.assertAlmostEqual(loaded["focused_threshold"], 0.66)
             self.assertAlmostEqual(loaded["alert_after_seconds"], 2.2)
+
+    def test_signal_quality_penalizes_noisy_input(self):
+        weighted, status = compute_signal_quality(
+            raw_focus_score=0.9,
+            eye_persistence=0.35,
+            missing_face_seconds=0.2,
+            rapid_flip_count=6,
+        )
+        self.assertLess(weighted, 0.9)
+        self.assertIn(status, {"LOW_CONFIDENCE", "NOISY_SIGNAL"})
+
+    def test_signal_quality_detects_away_from_camera(self):
+        weighted, status = compute_signal_quality(
+            raw_focus_score=0.9,
+            eye_persistence=1.0,
+            missing_face_seconds=2.5,
+            rapid_flip_count=0,
+        )
+        self.assertEqual(status, "AWAY_FROM_CAMERA")
+        self.assertLess(weighted, 0.9)
 
 
 if __name__ == "__main__":
