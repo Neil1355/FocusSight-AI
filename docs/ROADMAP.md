@@ -26,7 +26,7 @@ Deliverables:
 - Add calibration mode to personalize focus thresholds before tracking
 - Add low-light and occlusion fallback status labels
 
-## Phase 3: Analytics and Insights
+## Phase 3: Analytics and Insights (in progress)
 
 Goal: make session logs useful for self-improvement.
 
@@ -35,6 +35,7 @@ Deliverables:
 - Add aggregate summaries across all sessions
 - Add daily/weekly trend output (CSV or JSON)
 - Add "best focus window" and "most distracted window" metrics
+- Add cognitive-operations interpretation layer (vigilance, stability, readiness)
 
 ## Phase 4: Coaching Layer
 

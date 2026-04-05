@@ -17,14 +17,17 @@ FocusSight AI is a webcam-based focus tracker that detects face and eyes in real
 - Low-light and occlusion fallback labels for poor camera conditions
 - Frame-rate aware stability, FPS overlay, and elapsed-time logging
 - Post-session analytics script for recommendations
+- Cognitive operations report with vigilance, stability, and readiness indices
 - Unit tests for core logic
 
 ## Project Structure
 
 - focussight/tracker.py: Core tracker logic
 - focussight/summary.py: Session analytics logic
+- focussight/ops_report.py: Cognitive operations report logic
 - eye_test.py: Backward-compatible tracker launcher wrapper
 - session_summary.py: Backward-compatible summary launcher wrapper
+- ops_report.py: Backward-compatible operations report launcher wrapper
 - tests/test_tracker.py: Tracker and config unit tests
 - tests/test_summary.py: Summary and recommendation unit tests
 - requirements.txt: Python dependencies
@@ -106,6 +109,27 @@ This prints a summary for the latest log file, including:
 - Longest distracted streak (frames)
 - Longest distracted streak (seconds)
 - Recommended threshold and alert seconds
+
+## Run Cognitive Operations Report
+
+python -m focussight.ops_report
+
+Backward-compatible command:
+
+python ops_report.py
+
+Save report text to file:
+
+python -m focussight.ops_report --save reports/latest_ops_report.txt
+
+The report includes:
+
+- Vigilance index
+- Stability index
+- Operational readiness score
+- Attention lapse events
+- Mean recovery time
+- A practical interpretation line for field use
 
 ## Run Tests
 
