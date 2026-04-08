@@ -4,6 +4,9 @@ import tempfile
 import unittest
 
 from focussight.summary import (
+    compute_adaptive_thresholds,
+    compute_session_comparison,
+    export_session_history_csv,
     extract_focus_windows,
     longest_distracted_streak,
     longest_distracted_streak_seconds,
@@ -110,6 +113,115 @@ class SessionSummaryTests(unittest.TestCase):
         windows = extract_focus_windows(rows, window_seconds=8.0, top_n=1)
         self.assertEqual(len(windows["best"]), 1)
         self.assertEqual(len(windows["worst"]), 1)
+
+    def _write_session_csv(self, path, rows):
+        fieldnames = [
+            "timestamp", "elapsed_seconds", "frame_interval_seconds",
+            "observed_fps", "focus_score", "state",
+        ]
+        with open(path, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(row)
+
+    def test_export_session_history_csv(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logs_dir = os.path.join(temp_dir, "logs")
+            os.makedirs(logs_dir)
+            session_rows = [
+                {"timestamp": "2026-04-01T10:00:00", "elapsed_seconds": "0.0",
+                 "frame_interval_seconds": "0.2", "observed_fps": "5.0",
+                 "focus_score": "0.9", "state": "FOCUSED"},
+                {"timestamp": "2026-04-01T10:00:01", "elapsed_seconds": "0.2",
+                 "frame_interval_seconds": "0.2", "observed_fps": "5.0",
+                 "focus_score": "0.2", "state": "DISTRACTED"},
+            ]
+            self._write_session_csv(
+                os.path.join(logs_dir, "focus_session_01.csv"), session_rows
+            )
+            out_path = os.path.join(temp_dir, "history.csv")
+            result = export_session_history_csv(log_dir=logs_dir, output_path=out_path)
+            self.assertIsNotNone(result)
+            self.assertTrue(os.path.exists(out_path))
+            with open(out_path, newline="", encoding="utf-8") as fh:
+                reader = csv.DictReader(fh)
+                exported = list(reader)
+            self.assertEqual(len(exported), 1)
+            self.assertIn("avg_focus", exported[0])
+
+    def test_export_session_history_csv_no_logs(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = export_session_history_csv(log_dir=temp_dir)
+            self.assertIsNone(result)
+
+    def test_compute_session_comparison_single_session(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logs_dir = os.path.join(temp_dir, "logs")
+            os.makedirs(logs_dir)
+            session_rows = [
+                {"timestamp": "2026-04-01T10:00:00", "elapsed_seconds": "0.0",
+                 "frame_interval_seconds": "0.2", "observed_fps": "5.0",
+                 "focus_score": "0.9", "state": "FOCUSED"},
+            ]
+            csv_path = os.path.join(logs_dir, "focus_session_01.csv")
+            self._write_session_csv(csv_path, session_rows)
+            summary = summarize_file(csv_path)
+            result = compute_session_comparison(summary, log_dir=logs_dir)
+            self.assertIsNone(result)
+
+    def test_compute_session_comparison_two_sessions(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logs_dir = os.path.join(temp_dir, "logs")
+            os.makedirs(logs_dir)
+            rows_a = [
+                {"timestamp": "2026-04-01T10:00:00", "elapsed_seconds": "0.0",
+                 "frame_interval_seconds": "0.2", "observed_fps": "5.0",
+                 "focus_score": "0.9", "state": "FOCUSED"},
+            ]
+            rows_b = [
+                {"timestamp": "2026-04-02T10:00:00", "elapsed_seconds": "0.0",
+                 "frame_interval_seconds": "0.2", "observed_fps": "5.0",
+                 "focus_score": "0.4", "state": "DISTRACTED"},
+            ]
+            path_a = os.path.join(logs_dir, "focus_session_01.csv")
+            path_b = os.path.join(logs_dir, "focus_session_02.csv")
+            self._write_session_csv(path_a, rows_a)
+            self._write_session_csv(path_b, rows_b)
+            summary_b = summarize_file(path_b)
+            result = compute_session_comparison(summary_b, log_dir=logs_dir)
+            self.assertIsNotNone(result)
+            self.assertEqual(result["sessions_compared"], 1)
+            self.assertAlmostEqual(result["historical_avg_focus"], 0.9)
+            self.assertAlmostEqual(result["focus_delta"], 0.4 - 0.9)
+
+    def test_compute_adaptive_thresholds_no_history(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = compute_adaptive_thresholds(log_dir=temp_dir)
+            self.assertIsNone(result)
+
+    def test_compute_adaptive_thresholds_with_history(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logs_dir = os.path.join(temp_dir, "logs")
+            os.makedirs(logs_dir)
+            rows = [
+                {"timestamp": "2026-04-01T10:00:00", "elapsed_seconds": "0.0",
+                 "frame_interval_seconds": "0.2", "observed_fps": "5.0",
+                 "focus_score": "0.8", "state": "FOCUSED"},
+                {"timestamp": "2026-04-01T10:00:01", "elapsed_seconds": "0.2",
+                 "frame_interval_seconds": "0.2", "observed_fps": "5.0",
+                 "focus_score": "0.7", "state": "FOCUSED"},
+            ]
+            self._write_session_csv(
+                os.path.join(logs_dir, "focus_session_01.csv"), rows
+            )
+            result = compute_adaptive_thresholds(log_dir=logs_dir)
+            self.assertIsNotNone(result)
+            self.assertIn("suggested_threshold", result)
+            self.assertIn("suggested_alert_seconds", result)
+            self.assertEqual(result["based_on_sessions"], 1)
+            self.assertGreaterEqual(result["suggested_threshold"], 0.45)
+            self.assertLessEqual(result["suggested_threshold"], 0.80)
 
 
 if __name__ == "__main__":

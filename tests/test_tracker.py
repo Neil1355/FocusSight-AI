@@ -5,6 +5,7 @@ from collections import deque
 import csv
 
 from focussight.tracker import (
+    auto_update_profile_from_history,
     compute_focus_score,
     compute_observed_fps,
     compute_signal_quality,
@@ -261,6 +262,35 @@ class FocusLogicTests(unittest.TestCase):
                 self.fail("Expected generated artifacts but got None")
             self.assertTrue(os.path.exists(artifacts["txt_path"]))
             self.assertTrue(os.path.exists(artifacts["json_path"]))
+
+    def test_auto_update_profile_from_history_no_logs(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            profile_path = os.path.join(temp_dir, "profile.json")
+            updated, result = auto_update_profile_from_history(profile_path, log_dir=temp_dir)
+            self.assertFalse(updated)
+            self.assertIsInstance(result, str)
+
+    def test_auto_update_profile_from_history_with_logs(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logs_dir = os.path.join(temp_dir, "logs")
+            os.makedirs(logs_dir)
+            log_path = os.path.join(logs_dir, "focus_session_01.csv")
+            with open(log_path, "w", newline="", encoding="utf-8") as handle:
+                writer = csv.writer(handle)
+                writer.writerow([
+                    "timestamp", "elapsed_seconds", "frame_interval_seconds",
+                    "observed_fps", "focus_score", "state",
+                ])
+                writer.writerow(["2026-04-01T10:00:00", "0.0", "0.2", "5.0", "0.85", "FOCUSED"])
+                writer.writerow(["2026-04-01T10:00:01", "0.2", "0.2", "5.0", "0.75", "FOCUSED"])
+
+            profile_path = os.path.join(temp_dir, "profile.json")
+            updated, result = auto_update_profile_from_history(profile_path, log_dir=logs_dir)
+            self.assertTrue(updated)
+            self.assertIn("suggested_threshold", result)
+            self.assertTrue(os.path.exists(profile_path))
+            loaded = load_profile(profile_path)
+            self.assertAlmostEqual(loaded["focused_threshold"], result["suggested_threshold"])
 
 
 if __name__ == "__main__":

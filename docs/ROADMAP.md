@@ -26,28 +26,49 @@ Deliverables:
 - Add calibration mode to personalize focus thresholds before tracking
 - Add low-light and occlusion fallback status labels
 
-## Phase 3: Analytics and Insights (in progress)
+## Phase 3: Analytics and Insights (completed)
 
 Goal: make session logs useful for self-improvement.
 
 Deliverables:
 
 - Add aggregate summaries across all sessions
-- Add daily/weekly trend output (CSV or JSON) (completed)
-- Add "best focus window" and "most distracted window" metrics (completed)
-- Add cognitive-operations interpretation layer (vigilance, stability, readiness) (completed)
-- Add session tagging and baseline comparisons by task/context/location (completed)
-- Add recommendation generation from trends and cognitive signals (completed)
+- Add daily/weekly trend output (CSV or JSON)
+- Add "best focus window" and "most distracted window" metrics
+- Add cognitive-operations interpretation layer (vigilance, stability, readiness)
+- Add session tagging and baseline comparisons by task/context/location
+- Add recommendation generation from trends and cognitive signals
 
-## Phase 4: Coaching Layer (in progress)
+## Phase 4: Coaching Layer (completed)
 
 Goal: provide non-intrusive actionable coaching.
 
 Deliverables:
 
-- Add configurable reminder policies (gentle/strict) (completed)
-- Add break recommendations after sustained distracted streaks (completed)
-- Add session goals and scorecards (completed)
+- Add configurable reminder policies (gentle/strict)
+- Add break recommendations after sustained distracted streaks
+- Add session goals and scorecards
+
+## Phase 5: Multi-Session History Export & Comparison (completed)
+
+Goal: give users cross-session perspective to spot long-term patterns.
+
+Deliverables:
+
+- Export all session summaries to a single history CSV (`--export-history`)
+- Compare the current session against historical averages (focus delta, distracted %, streak)
+- Include session comparison section in text and HTML reports
+- Add standalone HTML report output (`--save-html`) for easy sharing and archiving
+
+## Phase 6: Adaptive Threshold Learning (completed)
+
+Goal: automatically improve default settings as more session data accumulates.
+
+Deliverables:
+
+- Derive threshold and alert-timing suggestions from recent session history
+- Auto-update a profile file from history before a run (`--auto-update-profile`)
+- Fall back gracefully when no history is available
 
 ## Stepwise Execution Plan
 

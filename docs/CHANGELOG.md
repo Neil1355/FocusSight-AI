@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-04-08
+
+- Added Phase 5 multi-session history export in `focussight/summary.py`: `export_session_history_csv()` writes one summary row per session to a single CSV file for external analysis.
+- Added Phase 5 session comparison in `focussight/summary.py`: `compute_session_comparison()` returns per-metric deltas between the current session and the historical average of all other sessions.
+- Extended `build_ops_report()` in `focussight/ops_report.py` to include a `session_comparison` key in the report payload.
+- Extended `render_ops_report()` to display a "Session vs. Historical Baseline" section when historical data is available.
+- Added `render_ops_report_html()` and `save_ops_report_html()` in `focussight/ops_report.py` to produce a self-contained HTML report with styled tables, colour-coded scorecard badge, and an optional session-comparison section.
+- Added `--save-html` CLI flag to `ops_report.py` to write the HTML report to a specified path.
+- Added `--export-history` CLI flag to `ops_report.py` to export all session summaries to a single CSV without needing to generate a full report.
+- Added Phase 6 adaptive threshold learning in `focussight/summary.py`: `compute_adaptive_thresholds()` derives threshold and alert-timing suggestions from the most recent N sessions.
+- Added `auto_update_profile_from_history()` in `focussight/tracker.py` to update a saved profile's threshold and alert settings from recent session history automatically.
+- Added `--auto-update-profile` CLI flag to `focussight/tracker.py`; when paired with `--save-profile`, the profile is updated from recent history before the session starts.
+- Expanded `tests/test_summary.py` with tests for `export_session_history_csv`, `compute_session_comparison`, and `compute_adaptive_thresholds`.
+- Expanded `tests/test_ops_report.py` with tests for `render_ops_report_html`, `save_ops_report_html`, session comparison rendering, and the updated `build_ops_report` payload.
+- Expanded `tests/test_tracker.py` with tests for `auto_update_profile_from_history` with and without available session logs.
+- Updated `docs/ROADMAP.md`: marked Phase 3 and Phase 4 as completed; added Phase 5 and Phase 6 entries.
+
 ## 2026-04-05
 - Added smoothed focus scoring to the webcam loop in `eye_test.py` using a rolling history window.
 - Added smoothed face box tracking to reduce rectangle jitter.

@@ -332,6 +332,26 @@ def generate_ops_artifacts(log_path, report_dir="reports", save_json=True, quiet
     return result
 
 
+def auto_update_profile_from_history(profile_path, log_dir="logs", recent_sessions=5):
+    """Update a profile's threshold and alert settings based on recent session history.
+
+    Returns (updated: bool, adaptive_info: dict or message: str).
+    """
+    from .summary import compute_adaptive_thresholds
+
+    adaptive = compute_adaptive_thresholds(log_dir, recent_sessions)
+    if adaptive is None:
+        return False, "No session history available for adaptive update."
+
+    current_config = load_profile(profile_path) if (profile_path and os.path.exists(profile_path)) else {}
+    merged = dict(DEFAULT_CONFIG)
+    merged.update(current_config)
+    merged["focused_threshold"] = adaptive["suggested_threshold"]
+    merged["alert_after_seconds"] = adaptive["suggested_alert_seconds"]
+    save_profile(profile_path, merged)
+    return True, adaptive
+
+
 def run_calibration_phase(
     cap,
     face_cascade_local,
@@ -780,6 +800,11 @@ def parse_args():
     parser.add_argument("--task-tag", type=str, default="", help="Optional task label (e.g., reading, coding)")
     parser.add_argument("--context-tag", type=str, default="", help="Optional context label (e.g., study, exam_prep)")
     parser.add_argument("--location-tag", type=str, default="", help="Optional location label (e.g., lab, library)")
+    parser.add_argument(
+        "--auto-update-profile",
+        action="store_true",
+        help="Update --save-profile thresholds from recent session history before running",
+    )
     return parser.parse_args()
 
 
@@ -793,6 +818,21 @@ def main():
         "reminder_policy": args.reminder_policy,
     }
     runtime_config = resolve_runtime_config(cli_values, profile_values)
+
+    if args.auto_update_profile and args.save_profile:
+        updated, result = auto_update_profile_from_history(args.save_profile)
+        if updated:
+            log_info(
+                f"Auto-updated profile from history: threshold={result['suggested_threshold']:.2f}, "
+                f"alert={result['suggested_alert_seconds']:.1f}s "
+                f"(based on {result['based_on_sessions']} session(s))",
+                args.quiet,
+            )
+            profile_values = load_profile(args.save_profile)
+            runtime_config = resolve_runtime_config(cli_values, profile_values)
+        else:
+            log_info(f"Auto-update profile skipped: {result}", args.quiet)
+
     final_config = run_focus_tracker(
         camera_index=runtime_config["camera_index"],
         focused_threshold=runtime_config["focused_threshold"],

@@ -11,6 +11,8 @@ from focussight.ops_report import (
     build_tag_comparison,
     derive_cog_sci_metrics,
     render_ops_report,
+    render_ops_report_html,
+    save_ops_report_html,
     save_ops_report_json,
 )
 
@@ -169,6 +171,132 @@ class OpsReportTests(unittest.TestCase):
             self.assertIn("temporal_trends", report)
             self.assertIn("recommendations", report)
             self.assertIn("scorecard", report)
+            self.assertIn("session_comparison", report)
+
+    def test_render_ops_report_includes_session_comparison(self):
+        report = {
+            "file": "logs/focus_session_test.csv",
+            "summary": {
+                "avg_focus": 0.75,
+                "distracted_pct": 25.0,
+                "longest_distracted_streak_seconds": 1.1,
+                "avg_fps": 8.0,
+            },
+            "cog_sci": {
+                "vigilance_index": 0.75,
+                "stability_index": 0.62,
+                "operational_readiness": 0.70,
+                "attention_lapse_events": 3,
+                "mean_recovery_seconds": 0.9,
+                "interpretation": "Moderate readiness; include short periodic resets",
+            },
+            "session_comparison": {
+                "session_avg_focus": 0.75,
+                "historical_avg_focus": 0.65,
+                "focus_delta": 0.10,
+                "session_distracted_pct": 25.0,
+                "historical_distracted_pct": 35.0,
+                "distracted_delta": -10.0,
+                "session_streak_seconds": 1.1,
+                "historical_streak_seconds": 2.5,
+                "sessions_compared": 4,
+            },
+        }
+        text = render_ops_report(report)
+        self.assertIn("Session vs. Historical Baseline", text)
+        self.assertIn("Sessions compared: 4", text)
+
+    def test_render_ops_report_html_structure(self):
+        report = {
+            "file": "logs/focus_session_test.csv",
+            "summary": {
+                "avg_focus": 0.75,
+                "distracted_pct": 25.0,
+                "longest_distracted_streak_seconds": 1.1,
+                "avg_fps": 8.0,
+            },
+            "cog_sci": {
+                "vigilance_index": 0.75,
+                "stability_index": 0.62,
+                "operational_readiness": 0.70,
+                "attention_lapse_events": 3,
+                "mean_recovery_seconds": 0.9,
+                "interpretation": "Moderate readiness; include short periodic resets",
+            },
+            "recommendations": ["Take a break after 60 minutes."],
+            "scorecard": {
+                "score": 0.85,
+                "status": "on-track",
+                "checks": {
+                    "focus_goal": {"target": 0.75, "actual": 0.75, "pass": True, "weight": 30},
+                },
+            },
+        }
+        html = render_ops_report_html(report)
+        self.assertIn("<!DOCTYPE html>", html)
+        self.assertIn("FocusSight Cognitive Operations Report", html)
+        self.assertIn("Cognitive Operations Metrics", html)
+        self.assertIn("ON-TRACK", html)
+        self.assertIn("Take a break after 60 minutes.", html)
+
+    def test_render_ops_report_html_with_comparison(self):
+        report = {
+            "file": "logs/focus_session_test.csv",
+            "summary": {
+                "avg_focus": 0.6,
+                "distracted_pct": 40.0,
+                "longest_distracted_streak_seconds": 3.0,
+                "avg_fps": 7.0,
+            },
+            "cog_sci": {
+                "vigilance_index": 0.6,
+                "stability_index": 0.55,
+                "operational_readiness": 0.58,
+                "attention_lapse_events": 5,
+                "mean_recovery_seconds": 2.0,
+                "interpretation": "Low readiness; schedule recovery and reduce task load",
+            },
+            "session_comparison": {
+                "session_avg_focus": 0.6,
+                "historical_avg_focus": 0.75,
+                "focus_delta": -0.15,
+                "session_distracted_pct": 40.0,
+                "historical_distracted_pct": 25.0,
+                "distracted_delta": 15.0,
+                "session_streak_seconds": 3.0,
+                "historical_streak_seconds": 1.5,
+                "sessions_compared": 3,
+            },
+        }
+        html = render_ops_report_html(report)
+        self.assertIn("Session vs. Historical Baseline", html)
+        self.assertIn("3 prior session(s)", html)
+
+    def test_save_ops_report_html(self):
+        report = {
+            "file": "logs/focus_session_test.csv",
+            "summary": {
+                "avg_focus": 0.7,
+                "distracted_pct": 30.0,
+                "longest_distracted_streak_seconds": 1.0,
+                "avg_fps": 9.0,
+            },
+            "cog_sci": {
+                "vigilance_index": 0.7,
+                "stability_index": 0.6,
+                "operational_readiness": 0.66,
+                "attention_lapse_events": 2,
+                "mean_recovery_seconds": 0.8,
+                "interpretation": "Moderate readiness; include short periodic resets",
+            },
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out_path = os.path.join(temp_dir, "report.html")
+            save_ops_report_html(report, out_path)
+            self.assertTrue(os.path.exists(out_path))
+            with open(out_path, encoding="utf-8") as fh:
+                content = fh.read()
+            self.assertIn("<!DOCTYPE html>", content)
 
 
 if __name__ == "__main__":

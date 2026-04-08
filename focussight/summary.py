@@ -280,6 +280,88 @@ def extract_focus_windows(rows, window_seconds=12.0, top_n=3):
     return {"best": best, "worst": worst}
 
 
+def export_session_history_csv(log_dir="logs", output_path=None):
+    """Export a one-row-per-session summary CSV for trend analysis and external tooling."""
+    summaries = summarize_directory(log_dir)
+    if not summaries:
+        return None
+
+    if output_path is None:
+        output_path = os.path.join(log_dir, "session_history.csv")
+
+    fieldnames = [
+        "file",
+        "rows",
+        "avg_focus",
+        "avg_fps",
+        "distracted_pct",
+        "longest_distracted_streak_frames",
+        "longest_distracted_streak_seconds",
+        "recommended_threshold",
+        "recommended_alert_seconds",
+    ]
+
+    with open(output_path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        for summary in summaries:
+            writer.writerow(summary)
+
+    return output_path
+
+
+def compute_session_comparison(summary, log_dir="logs"):
+    """Compare a session summary to the historical average of all other sessions.
+
+    Returns a dict with deltas, or None when fewer than two sessions exist.
+    """
+    all_summaries = summarize_directory(log_dir)
+    if len(all_summaries) < 2:
+        return None
+
+    session_file = os.path.abspath(summary["file"])
+    others = [s for s in all_summaries if os.path.abspath(s["file"]) != session_file]
+    if not others:
+        return None
+
+    hist_avg_focus = sum(s["avg_focus"] for s in others) / len(others)
+    hist_avg_distracted = sum(s["distracted_pct"] for s in others) / len(others)
+    hist_avg_streak = sum(s["longest_distracted_streak_seconds"] for s in others) / len(others)
+
+    return {
+        "session_avg_focus": summary["avg_focus"],
+        "historical_avg_focus": hist_avg_focus,
+        "focus_delta": summary["avg_focus"] - hist_avg_focus,
+        "session_distracted_pct": summary["distracted_pct"],
+        "historical_distracted_pct": hist_avg_distracted,
+        "distracted_delta": summary["distracted_pct"] - hist_avg_distracted,
+        "session_streak_seconds": summary["longest_distracted_streak_seconds"],
+        "historical_streak_seconds": hist_avg_streak,
+        "sessions_compared": len(others),
+    }
+
+
+def compute_adaptive_thresholds(log_dir="logs", recent_sessions=5):
+    """Derive suggested threshold and alert settings from recent session history.
+
+    Returns a dict with suggested values and context, or None when no history exists.
+    """
+    summaries = summarize_directory(log_dir)
+    if not summaries:
+        return None
+
+    recent = summaries[-recent_sessions:]
+    avg_focus = sum(s["avg_focus"] for s in recent) / len(recent)
+    suggested_threshold, suggested_alert_seconds = tune_recommendation(avg_focus)
+
+    return {
+        "suggested_threshold": suggested_threshold,
+        "suggested_alert_seconds": suggested_alert_seconds,
+        "based_on_sessions": len(recent),
+        "avg_focus_across_sessions": avg_focus,
+    }
+
+
 def print_report(summary):
     print(f"Session file: {summary['file']}")
     print(f"Rows: {summary['rows']}")
