@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-04-12 (Phase 9–11)
+
+- Added Phase 9 focus streak goals in `focussight/summary.py`: `compute_streak_records()` scans all session logs for the all-time best focused run; `check_streak_milestone()` returns achievement strings for round milestones (30s, 1 min, 2 min, 5 min, 10 min, 15 min, 30 min), user-defined streak goals, and personal bests.
+- Extended `run_focus_tracker()` with `streak_goal_seconds` parameter; live milestone notifications are printed during tracking when a round milestone or personal best is achieved.
+- Added `--streak-goal <seconds>` CLI flag to the tracker for setting a personal streak target.
+- Added Phase 10 distraction pattern analysis in `focussight/summary.py`: `compute_hour_of_day_distraction(log_dir)` buckets distracted-frame counts by hour-of-day; `find_worst_focus_hours()` and `find_best_focus_hours()` rank hours by distraction rate; `render_distraction_heatmap()` outputs an ASCII bar chart.
+- Added `--distraction-heatmap` CLI flag in `ops_report.py`; prints the heatmap and best/worst focus hours summary.
+- Added Phase 11 session notes in `focussight/summary.py`: `save_session_note(csv_path, text)` and `load_session_note(csv_path)` persist and retrieve per-session annotation text alongside the session CSV.
+- Extended `run_focus_tracker()` with `note` parameter; the note is saved to `<session>_note.txt` when logging is active.
+- Added `--note <text>` CLI flag to the tracker.
+- `build_ops_report()` now always includes a `note` key; `render_ops_report()` appends the note when non-empty; `render_ops_report_html()` adds a "Session Note" section.
+- Added 16 new tests across `test_summary.py` and `test_ops_report.py`; total suite grows from 61 → 77. ROADMAP updated to mark Phases 9–11 complete.
+
+## 2026-04-12 (Phase 7–8)
+
+- Added Phase 7 live terminal dashboard in `focussight/tracker.py`: `format_live_dashboard()` builds a compact one-line stat summary (state, avg focus, distracted %, current streak, elapsed time, signal status, policy, log status).
+- Extended `run_focus_tracker()` with `dashboard` and `dashboard_interval` parameters; when `--dashboard` is passed the dashboard line is printed to stdout every `dashboard_interval` seconds (default 5s).
+- Added `--dashboard` and `--dashboard-interval` CLI flags to `eye_test.py` / tracker `main()`.
+- Added Phase 8 daily summary in `focussight/summary.py`: `summarize_today(log_dir)` aggregates rows from all sessions recorded on the current local date.
+- Added `build_daily_report(log_dir)` in `focussight/ops_report.py` to produce a full cognitive-operations report for the current day (aggregate stats, cognitive metrics, focus windows, recommendations, scorecard).
+- Added `render_daily_report(report)` in `focussight/ops_report.py` for readable text output.
+- Added `--daily-summary` CLI flag in `ops_report.py`; prints today's aggregate report without needing a specific session file.
+- Expanded `tests/test_summary.py` with tests for `summarize_today` (no sessions, old sessions only, and today's sessions).
+- Expanded `tests/test_ops_report.py` with tests for `build_daily_report` and `render_daily_report`.
+- Expanded `tests/test_tracker.py` with tests for `format_live_dashboard` (focused and distracted states).
+- Updated `docs/ROADMAP.md`: added Phase 7 and Phase 8 entries as completed.
+
+## 2026-04-08
+
+- Added Phase 5 multi-session history export in `focussight/summary.py`: `export_session_history_csv()` writes one summary row per session to a single CSV file for external analysis.
+- Added Phase 5 session comparison in `focussight/summary.py`: `compute_session_comparison()` returns per-metric deltas between the current session and the historical average of all other sessions.
+- Extended `build_ops_report()` in `focussight/ops_report.py` to include a `session_comparison` key in the report payload.
+- Extended `render_ops_report()` to display a "Session vs. Historical Baseline" section when historical data is available.
+- Added `render_ops_report_html()` and `save_ops_report_html()` in `focussight/ops_report.py` to produce a self-contained HTML report with styled tables, colour-coded scorecard badge, and an optional session-comparison section.
+- Added `--save-html` CLI flag to `ops_report.py` to write the HTML report to a specified path.
+- Added `--export-history` CLI flag to `ops_report.py` to export all session summaries to a single CSV without needing to generate a full report.
+- Added Phase 6 adaptive threshold learning in `focussight/summary.py`: `compute_adaptive_thresholds()` derives threshold and alert-timing suggestions from the most recent N sessions.
+- Added `auto_update_profile_from_history()` in `focussight/tracker.py` to update a saved profile's threshold and alert settings from recent session history automatically.
+- Added `--auto-update-profile` CLI flag to `focussight/tracker.py`; when paired with `--save-profile`, the profile is updated from recent history before the session starts.
+- Expanded `tests/test_summary.py` with tests for `export_session_history_csv`, `compute_session_comparison`, and `compute_adaptive_thresholds`.
+- Expanded `tests/test_ops_report.py` with tests for `render_ops_report_html`, `save_ops_report_html`, session comparison rendering, and the updated `build_ops_report` payload.
+- Expanded `tests/test_tracker.py` with tests for `auto_update_profile_from_history` with and without available session logs.
+- Updated `docs/ROADMAP.md`: marked Phase 3 and Phase 4 as completed; added Phase 5 and Phase 6 entries.
+
 ## 2026-04-05
 - Added smoothed focus scoring to the webcam loop in `eye_test.py` using a rolling history window.
 - Added smoothed face box tracking to reduce rectangle jitter.

@@ -56,6 +56,35 @@ def log_info(message, quiet=False):
         print(message)
 
 
+def format_live_dashboard(
+    state,
+    focus_pct,
+    distracted_pct,
+    elapsed_seconds,
+    streak_seconds,
+    signal_status,
+    logging_enabled,
+    reminder_policy_key,
+):
+    """Return a compact single-line dashboard string for terminal output during tracking.
+
+    Designed to be printed periodically (e.g. every 5 seconds) so the user can
+    monitor session health without looking at the OpenCV window.
+    """
+    elapsed_min = int(elapsed_seconds) // 60
+    elapsed_sec = int(elapsed_seconds) % 60
+    log_indicator = "LOG:ON" if logging_enabled else "LOG:OFF"
+    state_label = f"[{state}]"
+    return (
+        f"{state_label:<12} "
+        f"focus={focus_pct:.0f}%  distracted={distracted_pct:.0f}%  "
+        f"streak={streak_seconds:.0f}s  "
+        f"elapsed={elapsed_min:02d}:{elapsed_sec:02d}  "
+        f"signal={signal_status}  "
+        f"policy={reminder_policy_key}  {log_indicator}"
+    )
+
+
 def parse_session_tags(task_tag=None, context_tag=None, location_tag=None):
     """Normalize optional session tags used for grouped analytics."""
     def _clean(value):
@@ -332,6 +361,26 @@ def generate_ops_artifacts(log_path, report_dir="reports", save_json=True, quiet
     return result
 
 
+def auto_update_profile_from_history(profile_path, log_dir="logs", recent_sessions=5):
+    """Update a profile's threshold and alert settings based on recent session history.
+
+    Returns (updated: bool, adaptive_info: dict or message: str).
+    """
+    from .summary import compute_adaptive_thresholds
+
+    adaptive = compute_adaptive_thresholds(log_dir, recent_sessions)
+    if adaptive is None:
+        return False, "No session history available for adaptive update."
+
+    current_config = load_profile(profile_path) if (profile_path and os.path.exists(profile_path)) else {}
+    merged = dict(DEFAULT_CONFIG)
+    merged.update(current_config)
+    merged["focused_threshold"] = adaptive["suggested_threshold"]
+    merged["alert_after_seconds"] = adaptive["suggested_alert_seconds"]
+    save_profile(profile_path, merged)
+    return True, adaptive
+
+
 def run_calibration_phase(
     cap,
     face_cascade_local,
@@ -463,6 +512,10 @@ def run_focus_tracker(
     context_tag="",
     location_tag="",
     reminder_policy=DEFAULT_REMINDER_POLICY,
+    dashboard=False,
+    dashboard_interval=5.0,
+    streak_goal_seconds=0.0,
+    note="",
 ):
     face_cascade_local, eye_cascade_local, profile_face_cascade_local = ensure_cascades(face_xml, eye_xml)
     cap = cv2.VideoCapture(camera_index)
@@ -503,8 +556,20 @@ def run_focus_tracker(
     session_start_time = time.time()
     last_frame_time = None
     last_reminder_at = None
+    last_dashboard_at = 0.0
     active_prompt_text = ""
     active_prompt_until = 0.0
+    session_focus_scores = []
+    session_distracted_count = 0
+    session_frame_count = 0
+
+    # Phase 9: personal best streak tracking
+    from .summary import compute_streak_records, check_streak_milestone
+    _records = compute_streak_records("logs")
+    all_time_best_streak = _records["best_streak_seconds"] if _records else 0.0
+    current_focused_streak = 0.0
+    session_best_streak = 0.0
+    last_milestone_reported = ""
 
     if logging_enabled:
         log_file_handle, log_writer, active_log_path = start_session_logger()
@@ -596,12 +661,58 @@ def run_focus_tracker(
                 state_flip_timestamps.append(now)
             last_state = state
 
+            session_frame_count += 1
+            session_focus_scores.append(weighted_focus_score)
+            if state == "DISTRACTED":
+                session_distracted_count += 1
+
             if state == "FOCUSED":
                 distracted_since = None
                 active_prompt_text = ""
                 active_prompt_until = 0.0
-            elif distracted_since is None:
-                distracted_since = now
+                prev_focused_streak = current_focused_streak
+                current_focused_streak += frame_interval_seconds
+                if current_focused_streak > session_best_streak:
+                    session_best_streak = current_focused_streak
+                milestone = check_streak_milestone(
+                    current_focused_streak,
+                    record_seconds=all_time_best_streak,
+                    streak_goal_seconds=streak_goal_seconds,
+                    prev_streak_seconds=prev_focused_streak,
+                )
+                if milestone and milestone != last_milestone_reported:
+                    log_info(milestone, quiet)
+                    last_milestone_reported = milestone
+            else:
+                current_focused_streak = 0.0
+                if distracted_since is None:
+                    distracted_since = now
+
+            if dashboard and (now - last_dashboard_at) >= dashboard_interval:
+                elapsed = now - session_start_time
+                avg_focus_pct = (
+                    (sum(session_focus_scores) / len(session_focus_scores)) * 100.0
+                    if session_focus_scores
+                    else 0.0
+                )
+                distracted_pct = (
+                    (session_distracted_count / session_frame_count) * 100.0
+                    if session_frame_count
+                    else 0.0
+                )
+                streak = max(0.0, now - distracted_since) if distracted_since else 0.0
+                dashboard_line = format_live_dashboard(
+                    state,
+                    avg_focus_pct,
+                    distracted_pct,
+                    elapsed,
+                    streak,
+                    signal_status,
+                    logging_enabled,
+                    reminder_policy_key,
+                )
+                print(dashboard_line)
+                last_dashboard_at = now
 
             if logging_enabled and log_writer is not None:
                 log_writer.writerow(
@@ -742,6 +853,10 @@ def run_focus_tracker(
             log_file_handle.close()
         if auto_report and active_log_path and active_log_path not in generated_report_logs:
             generate_ops_artifacts(active_log_path, report_dir=report_dir, quiet=quiet)
+        if note and active_log_path:
+            from .summary import save_session_note
+            note_file = save_session_note(active_log_path, note)
+            log_info(f"Session note saved: {note_file}", quiet)
 
     cap.release()
     cv2.destroyAllWindows()
@@ -780,6 +895,32 @@ def parse_args():
     parser.add_argument("--task-tag", type=str, default="", help="Optional task label (e.g., reading, coding)")
     parser.add_argument("--context-tag", type=str, default="", help="Optional context label (e.g., study, exam_prep)")
     parser.add_argument("--location-tag", type=str, default="", help="Optional location label (e.g., lab, library)")
+    parser.add_argument(
+        "--auto-update-profile",
+        action="store_true",
+        help="Update --save-profile thresholds from recent session history before running",
+    )
+    parser.add_argument("--dashboard", action="store_true", help="Print live session stats to the terminal periodically")
+    parser.add_argument(
+        "--dashboard-interval",
+        type=float,
+        default=5.0,
+        help="Seconds between live dashboard prints (default: 5.0)",
+    )
+    parser.add_argument(
+        "--streak-goal",
+        type=float,
+        default=0.0,
+        metavar="SECONDS",
+        help="Personal focused-streak goal in seconds; notifies when goal is reached",
+    )
+    parser.add_argument(
+        "--note",
+        type=str,
+        default="",
+        metavar="TEXT",
+        help="Short annotation saved alongside the session log after the run",
+    )
     return parser.parse_args()
 
 
@@ -793,6 +934,21 @@ def main():
         "reminder_policy": args.reminder_policy,
     }
     runtime_config = resolve_runtime_config(cli_values, profile_values)
+
+    if args.auto_update_profile and args.save_profile:
+        updated, result = auto_update_profile_from_history(args.save_profile)
+        if updated:
+            log_info(
+                f"Auto-updated profile from history: threshold={result['suggested_threshold']:.2f}, "
+                f"alert={result['suggested_alert_seconds']:.1f}s "
+                f"(based on {result['based_on_sessions']} session(s))",
+                args.quiet,
+            )
+            profile_values = load_profile(args.save_profile)
+            runtime_config = resolve_runtime_config(cli_values, profile_values)
+        else:
+            log_info(f"Auto-update profile skipped: {result}", args.quiet)
+
     final_config = run_focus_tracker(
         camera_index=runtime_config["camera_index"],
         focused_threshold=runtime_config["focused_threshold"],
@@ -806,6 +962,10 @@ def main():
         context_tag=args.context_tag,
         location_tag=args.location_tag,
         reminder_policy=runtime_config["reminder_policy"],
+        dashboard=args.dashboard,
+        dashboard_interval=args.dashboard_interval,
+        streak_goal_seconds=args.streak_goal,
+        note=args.note,
     )
 
     if args.save_profile:
