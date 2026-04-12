@@ -378,6 +378,81 @@ class OpsReportTests(unittest.TestCase):
         self.assertIn("Recommendations", text)
         self.assertIn("Daily Scorecard", text)
 
+    # --- Phase 11: Session Notes in ops report ---
+
+    def test_render_ops_report_includes_note(self):
+        report = {
+            "file": "logs/focus_session_test.csv",
+            "summary": {
+                "avg_focus": 0.75,
+                "distracted_pct": 25.0,
+                "longest_distracted_streak_seconds": 1.2,
+                "avg_fps": 8.0,
+            },
+            "cog_sci": {
+                "vigilance_index": 0.75,
+                "stability_index": 0.62,
+                "operational_readiness": 0.70,
+                "attention_lapse_events": 3,
+                "mean_recovery_seconds": 0.9,
+                "interpretation": "Moderate readiness",
+            },
+            "comparison": {},
+            "focus_windows": {"best": [], "worst": []},
+            "temporal_trends": {"by_day": {}, "by_week": {}},
+            "recommendations": [],
+            "scorecard": {"score": 0.7, "status": "on-track", "checks": {}},
+            "session_comparison": None,
+            "note": "Productive coding session",
+        }
+        text = render_ops_report(report)
+        self.assertIn("Productive coding session", text)
+
+    def test_render_ops_report_html_includes_note(self):
+        report = {
+            "file": "logs/focus_session_test.csv",
+            "summary": {
+                "avg_focus": 0.75,
+                "distracted_pct": 25.0,
+                "longest_distracted_streak_seconds": 1.0,
+                "avg_fps": 8.0,
+            },
+            "cog_sci": {
+                "vigilance_index": 0.75,
+                "stability_index": 0.62,
+                "operational_readiness": 0.70,
+                "attention_lapse_events": 2,
+                "mean_recovery_seconds": 0.8,
+                "interpretation": "Moderate readiness",
+            },
+            "recommendations": ["Rest well."],
+            "scorecard": {"score": 0.8, "status": "on-track", "checks": {}},
+            "note": "Exam prep day",
+        }
+        html = render_ops_report_html(report)
+        self.assertIn("Exam prep day", html)
+        self.assertIn("Session Note", html)
+
+    def test_build_ops_report_note_key_present(self):
+        """build_ops_report should always include a 'note' key."""
+        import csv as csv_mod
+        with tempfile.TemporaryDirectory() as temp_dir:
+            csv_path = os.path.join(temp_dir, "focus_session_01.csv")
+            with open(csv_path, "w", newline="", encoding="utf-8") as fh:
+                writer = csv_mod.DictWriter(fh, fieldnames=[
+                    "timestamp", "elapsed_seconds", "frame_interval_seconds",
+                    "observed_fps", "focus_score", "state",
+                ], extrasaction="ignore")
+                writer.writeheader()
+                writer.writerow({
+                    "timestamp": "2026-04-01T10:00:00", "elapsed_seconds": "0.0",
+                    "frame_interval_seconds": "0.2", "observed_fps": "5.0",
+                    "focus_score": "0.8", "state": "FOCUSED",
+                })
+            report = build_ops_report(csv_path)
+            self.assertIn("note", report)
+            self.assertEqual(report["note"], "")
+
 
 if __name__ == "__main__":
     unittest.main()

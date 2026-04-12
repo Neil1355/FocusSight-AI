@@ -362,6 +362,158 @@ def compute_adaptive_thresholds(log_dir="logs", recent_sessions=5):
     }
 
 
+def compute_streak_records(log_dir="logs"):
+    """Find the all-time best focused streak (in seconds) across all sessions.
+
+    Returns a dict with ``best_streak_seconds``, ``best_streak_file``, and
+    ``session_bests`` (one entry per session that has streak data), or None when
+    no session history exists.
+    """
+    summaries = summarize_directory(log_dir)
+    if not summaries:
+        return None
+
+    all_time_best_seconds = 0.0
+    all_time_best_file = None
+    session_bests = []
+
+    pattern = os.path.join(log_dir, "focus_session_*.csv")
+    files = sorted(glob.glob(pattern))
+    for file_path in files:
+        rows = load_session_rows(file_path)
+        best = _longest_focused_streak_seconds(rows)
+        session_bests.append({"file": file_path, "best_focused_streak_seconds": best})
+        if best > all_time_best_seconds:
+            all_time_best_seconds = best
+            all_time_best_file = file_path
+
+    return {
+        "best_streak_seconds": all_time_best_seconds,
+        "best_streak_file": all_time_best_file,
+        "session_bests": session_bests,
+    }
+
+
+def _longest_focused_streak_seconds(rows):
+    """Return the longest continuous FOCUSED run in seconds from a list of row dicts."""
+    best = 0.0
+    current = 0.0
+    for row in rows:
+        state = _parse_state(row.get("state") or "")
+        interval = _parse_float(row.get("frame_interval_seconds") or "") or 0.0
+        if state == "FOCUSED":
+            current += interval
+            if current > best:
+                best = current
+        else:
+            current = 0.0
+    return best
+
+
+def check_streak_milestone(current_streak_seconds, record_seconds=0.0, streak_goal_seconds=0.0, prev_streak_seconds=0.0):
+    """Return an achievement message when the user hits a new record or round milestone.
+
+    Args:
+        current_streak_seconds: The current continuous focused streak duration.
+        record_seconds: All-time best focused streak (0 = no prior record).
+        streak_goal_seconds: User-defined personal target (0 = no goal set).
+        prev_streak_seconds: Streak value from the previous check (used to detect
+            first-crossing of the goal threshold without relying on a fixed frame interval).
+
+    Returns a non-empty string when noteworthy; empty string otherwise.
+    """
+    milestones = [30, 60, 120, 300, 600, 900, 1800]
+    for m in milestones:
+        lower = m - 0.5
+        upper = m + 0.5
+        if lower <= current_streak_seconds <= upper:
+            minutes = m // 60
+            label = f"{minutes} min" if minutes >= 1 else f"{m}s"
+            return f"🎯 Focus milestone: {label} focused streak!"
+
+    if streak_goal_seconds > 0 and prev_streak_seconds < streak_goal_seconds <= current_streak_seconds:
+        goal_min = streak_goal_seconds / 60
+        return f"🏆 Streak goal reached: {goal_min:.0f} min focused!"
+
+    if record_seconds > 0 and current_streak_seconds > record_seconds:
+        return f"🥇 New personal best focused streak: {current_streak_seconds:.0f}s!"
+
+    return ""
+
+
+def compute_hour_of_day_distraction(log_dir="logs"):
+    """Bucket distracted-frame rates by hour-of-day (0–23) across all session logs.
+
+    Returns a dict mapping hour int → {'total_frames': int, 'distracted_frames': int,
+    'distracted_pct': float}, or an empty dict when no data is available.
+    """
+    buckets = {h: {"total_frames": 0, "distracted_frames": 0} for h in range(24)}
+    pattern = os.path.join(log_dir, "focus_session_*.csv")
+    files = sorted(glob.glob(pattern))
+
+    for file_path in files:
+        rows = load_session_rows(file_path)
+        for row in rows:
+            ts = _parse_timestamp(row.get("timestamp") or "")
+            if ts is None:
+                continue
+            hour = ts.hour
+            buckets[hour]["total_frames"] += 1
+            state = _parse_state(row.get("state") or "")
+            if state == "DISTRACTED":
+                buckets[hour]["distracted_frames"] += 1
+
+    result = {}
+    for hour, counts in buckets.items():
+        total = counts["total_frames"]
+        if total == 0:
+            continue
+        pct = (counts["distracted_frames"] / total) * 100.0
+        result[hour] = {
+            "total_frames": total,
+            "distracted_frames": counts["distracted_frames"],
+            "distracted_pct": pct,
+        }
+    return result
+
+
+def find_worst_focus_hours(buckets, top_n=3):
+    """Return the top_n hours with the highest distracted percentage from an hour-of-day bucket dict."""
+    if not buckets:
+        return []
+    ranked = sorted(buckets.items(), key=lambda kv: kv[1]["distracted_pct"], reverse=True)
+    return [{"hour": h, **v} for h, v in ranked[:top_n]]
+
+
+def find_best_focus_hours(buckets, top_n=3):
+    """Return the top_n hours with the lowest distracted percentage from an hour-of-day bucket dict."""
+    if not buckets:
+        return []
+    ranked = sorted(buckets.items(), key=lambda kv: kv[1]["distracted_pct"])
+    return [{"hour": h, **v} for h, v in ranked[:top_n]]
+
+
+def render_distraction_heatmap(buckets, bar_width=30):
+    """Render an ASCII bar chart of distraction % by hour-of-day.
+
+    Returns a multi-line string; empty string when no data.
+    """
+    if not buckets:
+        return ""
+
+    max_pct = max(v["distracted_pct"] for v in buckets.values()) or 1.0
+    lines = ["Hour | Distracted % | Chart"]
+    lines.append("-" * (bar_width + 30))
+    for hour in range(24):
+        if hour not in buckets:
+            continue
+        pct = buckets[hour]["distracted_pct"]
+        bar_len = int(round((pct / max_pct) * bar_width))
+        bar = "█" * bar_len
+        lines.append(f"{hour:02d}:00 | {pct:6.1f}%      | {bar}")
+    return "\n".join(lines)
+
+
 def summarize_today(log_dir="logs"):
     """Aggregate rows from all sessions logged today (local date).
 
@@ -408,6 +560,33 @@ def print_report(summary):
         f"threshold={summary['recommended_threshold']:.2f}, "
         f"alert={summary['recommended_alert_seconds']:.1f}s"
     )
+    note = load_session_note(summary["file"])
+    if note:
+        print(f"Session note: {note}")
+
+
+def note_path_for_session(session_csv_path):
+    """Return the canonical .txt note path for a given session CSV path."""
+    base = os.path.splitext(session_csv_path)[0]
+    return base + "_note.txt"
+
+
+def save_session_note(session_csv_path, note_text):
+    """Persist note_text alongside the session CSV as <session>_note.txt."""
+    path = note_path_for_session(session_csv_path)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(note_text.strip())
+    return path
+
+
+def load_session_note(session_csv_path):
+    """Load and return the note text for a session CSV, or empty string if none exists."""
+    path = note_path_for_session(session_csv_path)
+    if not os.path.exists(path):
+        return ""
+    with open(path, encoding="utf-8") as fh:
+        return fh.read().strip()
+
 
 
 def main():

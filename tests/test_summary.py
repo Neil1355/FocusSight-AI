@@ -5,12 +5,20 @@ import unittest
 from datetime import datetime
 
 from focussight.summary import (
+    check_streak_milestone,
     compute_adaptive_thresholds,
+    compute_hour_of_day_distraction,
     compute_session_comparison,
+    compute_streak_records,
     export_session_history_csv,
     extract_focus_windows,
+    find_best_focus_hours,
+    find_worst_focus_hours,
+    load_session_note,
     longest_distracted_streak,
     longest_distracted_streak_seconds,
+    render_distraction_heatmap,
+    save_session_note,
     summarize_by_day,
     summarize_by_tag,
     summarize_by_week,
@@ -262,6 +270,123 @@ class SessionSummaryTests(unittest.TestCase):
             self.assertEqual(result["session_count"], 1)
             self.assertAlmostEqual(result["avg_focus"], (0.85 + 0.35) / 2)
             self.assertIn("session_files", result)
+
+    # --- Phase 9: Focus Streak Goals & Personal Records ---
+
+    def test_compute_streak_records_no_history(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = compute_streak_records(log_dir=temp_dir)
+            self.assertIsNone(result)
+
+    def test_compute_streak_records_with_focused_session(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logs_dir = os.path.join(temp_dir, "logs")
+            os.makedirs(logs_dir)
+            rows = [
+                {"timestamp": "2026-04-01T10:00:00", "elapsed_seconds": "0.0",
+                 "frame_interval_seconds": "1.0", "observed_fps": "1.0",
+                 "focus_score": "0.8", "state": "FOCUSED"},
+                {"timestamp": "2026-04-01T10:00:01", "elapsed_seconds": "1.0",
+                 "frame_interval_seconds": "1.0", "observed_fps": "1.0",
+                 "focus_score": "0.8", "state": "FOCUSED"},
+                {"timestamp": "2026-04-01T10:00:02", "elapsed_seconds": "2.0",
+                 "frame_interval_seconds": "1.0", "observed_fps": "1.0",
+                 "focus_score": "0.3", "state": "DISTRACTED"},
+            ]
+            self._write_session_csv(os.path.join(logs_dir, "focus_session_01.csv"), rows)
+            result = compute_streak_records(log_dir=logs_dir)
+            self.assertIsNotNone(result)
+            self.assertAlmostEqual(result["best_streak_seconds"], 2.0)
+            self.assertIsNotNone(result["best_streak_file"])
+
+    def test_check_streak_milestone_round_milestone(self):
+        msg = check_streak_milestone(60.0, record_seconds=0.0, streak_goal_seconds=0.0)
+        self.assertIn("1 min", msg)
+
+    def test_check_streak_milestone_new_record(self):
+        msg = check_streak_milestone(125.0, record_seconds=100.0, streak_goal_seconds=0.0)
+        self.assertIn("personal best", msg.lower())
+
+    def test_check_streak_milestone_goal_reached(self):
+        # prev=89.5 < goal=90.0 ≤ current=90.5, no round milestone → goal fires
+        msg = check_streak_milestone(90.5, record_seconds=50.0, streak_goal_seconds=90.0, prev_streak_seconds=89.5)
+        self.assertIn("goal", msg.lower())
+
+    def test_check_streak_milestone_goal_reached_first_session(self):
+        # Should fire even when record_seconds=0 (first ever session)
+        msg = check_streak_milestone(90.5, record_seconds=0.0, streak_goal_seconds=90.0, prev_streak_seconds=89.5)
+        self.assertIn("goal", msg.lower())
+
+    def test_check_streak_milestone_no_milestone(self):
+        msg = check_streak_milestone(7.0, record_seconds=0.0, streak_goal_seconds=0.0)
+        self.assertEqual(msg, "")
+
+    # --- Phase 10: Distraction Pattern Analysis ---
+
+    def test_compute_hour_of_day_distraction_empty(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = compute_hour_of_day_distraction(log_dir=temp_dir)
+            self.assertEqual(result, {})
+
+    def test_compute_hour_of_day_distraction_with_data(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logs_dir = os.path.join(temp_dir, "logs")
+            os.makedirs(logs_dir)
+            rows = [
+                {"timestamp": "2026-04-01T10:00:00", "elapsed_seconds": "0.0",
+                 "frame_interval_seconds": "1.0", "observed_fps": "1.0",
+                 "focus_score": "0.9", "state": "FOCUSED"},
+                {"timestamp": "2026-04-01T10:00:01", "elapsed_seconds": "1.0",
+                 "frame_interval_seconds": "1.0", "observed_fps": "1.0",
+                 "focus_score": "0.2", "state": "DISTRACTED"},
+            ]
+            self._write_session_csv(os.path.join(logs_dir, "focus_session_01.csv"), rows)
+            result = compute_hour_of_day_distraction(log_dir=logs_dir)
+            self.assertIn(10, result)
+            self.assertEqual(result[10]["total_frames"], 2)
+            self.assertEqual(result[10]["distracted_frames"], 1)
+            self.assertAlmostEqual(result[10]["distracted_pct"], 50.0)
+
+    def test_find_worst_and_best_focus_hours(self):
+        buckets = {
+            9: {"total_frames": 10, "distracted_frames": 8, "distracted_pct": 80.0},
+            14: {"total_frames": 10, "distracted_frames": 1, "distracted_pct": 10.0},
+            10: {"total_frames": 10, "distracted_frames": 4, "distracted_pct": 40.0},
+        }
+        worst = find_worst_focus_hours(buckets, top_n=1)
+        self.assertEqual(worst[0]["hour"], 9)
+        best = find_best_focus_hours(buckets, top_n=1)
+        self.assertEqual(best[0]["hour"], 14)
+
+    def test_render_distraction_heatmap_empty(self):
+        self.assertEqual(render_distraction_heatmap({}), "")
+
+    def test_render_distraction_heatmap_with_data(self):
+        buckets = {
+            10: {"total_frames": 10, "distracted_frames": 5, "distracted_pct": 50.0},
+        }
+        output = render_distraction_heatmap(buckets)
+        self.assertIn("10:00", output)
+        self.assertIn("50.0%", output)
+
+    # --- Phase 11: Session Notes & Annotations ---
+
+    def test_save_and_load_session_note(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            csv_path = os.path.join(temp_dir, "focus_session_x.csv")
+            # Create a placeholder CSV
+            with open(csv_path, "w", encoding="utf-8") as fh:
+                fh.write("")
+            note_path = save_session_note(csv_path, "Good study session")
+            self.assertTrue(os.path.exists(note_path))
+            loaded = load_session_note(csv_path)
+            self.assertEqual(loaded, "Good study session")
+
+    def test_load_session_note_missing(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            csv_path = os.path.join(temp_dir, "focus_session_y.csv")
+            result = load_session_note(csv_path)
+            self.assertEqual(result, "")
 
 
 if __name__ == "__main__":

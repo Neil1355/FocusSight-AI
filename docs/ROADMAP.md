@@ -92,7 +92,40 @@ Deliverables:
 - `render_daily_report(report)` in `ops_report.py` – text form of the daily report
 - `--daily-summary` CLI flag in `ops_report.py` for quick end-of-day check-in
 
-## Stepwise Execution Plan
+## Phase 9: Focus Streak Goals & Personal Records (completed)
+
+Goal: gamify sustained focus and surface personal-best milestones during tracking.
+
+Deliverables:
+
+- `compute_streak_records(log_dir)` in `summary.py` – finds all-time best focused streak across all sessions
+- `check_streak_milestone(current, record, goal)` in `summary.py` – returns achievement messages for round milestones (30s, 1 min, 5 min…), personal bests, and user-defined streak goals
+- Live milestone notifications printed to the terminal during tracking sessions
+- `--streak-goal <seconds>` CLI flag to set a personal focused-streak target
+
+## Phase 10: Distraction Pattern Analysis (completed)
+
+Goal: surface time-of-day trends so users know when they focus best and worst.
+
+Deliverables:
+
+- `compute_hour_of_day_distraction(log_dir)` in `summary.py` – buckets distracted-frame rate by hour-of-day across all session logs
+- `find_worst_focus_hours(buckets, top_n)` and `find_best_focus_hours(buckets, top_n)` helpers
+- `render_distraction_heatmap(buckets)` – ASCII hourly bar chart
+- `--distraction-heatmap` CLI flag in `ops_report.py`
+
+## Phase 11: Session Notes & Annotations (completed)
+
+Goal: let users attach context to sessions for richer post-hoc analysis.
+
+Deliverables:
+
+- `--note <text>` CLI flag on the tracker – saves a plain-text note file alongside the session CSV after the run
+- `save_session_note(csv_path, text)` and `load_session_note(csv_path)` helpers in `summary.py`
+- Session note included in `render_ops_report()` text output and HTML report when present
+- `build_ops_report()` always includes a `note` key (empty string when no note file exists)
+
+
 
 1. Complete Phase 2 fallback labels and reliability metrics.
 2. Validate with tests and update docs/changelog.

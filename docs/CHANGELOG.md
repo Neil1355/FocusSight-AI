@@ -1,6 +1,19 @@
 # Changelog
 
-## 2026-04-12
+## 2026-04-12 (Phase 9–11)
+
+- Added Phase 9 focus streak goals in `focussight/summary.py`: `compute_streak_records()` scans all session logs for the all-time best focused run; `check_streak_milestone()` returns achievement strings for round milestones (30s, 1 min, 2 min, 5 min, 10 min, 15 min, 30 min), user-defined streak goals, and personal bests.
+- Extended `run_focus_tracker()` with `streak_goal_seconds` parameter; live milestone notifications are printed during tracking when a round milestone or personal best is achieved.
+- Added `--streak-goal <seconds>` CLI flag to the tracker for setting a personal streak target.
+- Added Phase 10 distraction pattern analysis in `focussight/summary.py`: `compute_hour_of_day_distraction(log_dir)` buckets distracted-frame counts by hour-of-day; `find_worst_focus_hours()` and `find_best_focus_hours()` rank hours by distraction rate; `render_distraction_heatmap()` outputs an ASCII bar chart.
+- Added `--distraction-heatmap` CLI flag in `ops_report.py`; prints the heatmap and best/worst focus hours summary.
+- Added Phase 11 session notes in `focussight/summary.py`: `save_session_note(csv_path, text)` and `load_session_note(csv_path)` persist and retrieve per-session annotation text alongside the session CSV.
+- Extended `run_focus_tracker()` with `note` parameter; the note is saved to `<session>_note.txt` when logging is active.
+- Added `--note <text>` CLI flag to the tracker.
+- `build_ops_report()` now always includes a `note` key; `render_ops_report()` appends the note when non-empty; `render_ops_report_html()` adds a "Session Note" section.
+- Added 16 new tests across `test_summary.py` and `test_ops_report.py`; total suite grows from 61 → 77. ROADMAP updated to mark Phases 9–11 complete.
+
+## 2026-04-12 (Phase 7–8)
 
 - Added Phase 7 live terminal dashboard in `focussight/tracker.py`: `format_live_dashboard()` builds a compact one-line stat summary (state, avg focus, distracted %, current streak, elapsed time, signal status, policy, log status).
 - Extended `run_focus_tracker()` with `dashboard` and `dashboard_interval` parameters; when `--dashboard` is passed the dashboard line is printed to stdout every `dashboard_interval` seconds (default 5s).

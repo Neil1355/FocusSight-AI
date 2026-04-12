@@ -5,8 +5,12 @@ from statistics import mean
 
 from .summary import (
     compute_session_comparison,
+    compute_hour_of_day_distraction,
     extract_focus_windows,
+    find_best_focus_hours,
+    find_worst_focus_hours,
     load_session_rows,
+    render_distraction_heatmap,
     summarize_directory,
     summarize_directory_temporal,
     summarize_directory_with_tags,
@@ -197,6 +201,7 @@ def build_session_scorecard(
 
 
 def build_ops_report(csv_path):
+    from .summary import load_session_note
     summary = summarize_file(csv_path)
     rows = load_session_rows(csv_path)
     metrics = derive_cog_sci_metrics(summary, rows)
@@ -206,6 +211,7 @@ def build_ops_report(csv_path):
     recommendations = build_recommendations(summary, metrics, windows, temporal_trends)
     scorecard = build_session_scorecard(summary, metrics)
     session_comparison = compute_session_comparison(summary)
+    note = load_session_note(csv_path)
 
     report = {
         "file": csv_path,
@@ -217,6 +223,7 @@ def build_ops_report(csv_path):
         "recommendations": recommendations,
         "scorecard": scorecard,
         "session_comparison": session_comparison,
+        "note": note,
     }
     return report
 
@@ -325,6 +332,12 @@ def render_ops_report(report):
         "",
         f"Interpretation: {cog['interpretation']}",
     ])
+
+    # Phase 11: session notes
+    note = report.get("note", "") or ""
+    if note:
+        lines.extend(["", f"Session Note: {note}"])
+
     return "\n".join(lines)
 
 
@@ -471,6 +484,17 @@ def render_ops_report_html(report):
         f"{scorecard_rows}"
         "    </table>\n"
         "  </section>\n"
+    )
+    note = report.get("note", "") or ""
+    if note:
+        import html as _html
+        html += (
+            "  <section>\n"
+            "    <h2>Session Note</h2>\n"
+            f"    <p>{_html.escape(note)}</p>\n"
+            "  </section>\n"
+        )
+    html += (
         "</body>\n"
         "</html>"
     )
@@ -607,11 +631,18 @@ def parse_args():
         action="store_true",
         help="Print an aggregate report for all sessions recorded today",
     )
+    parser.add_argument(
+        "--distraction-heatmap",
+        action="store_true",
+        help="Print an ASCII hour-of-day distraction heatmap across all sessions",
+    )
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+    # Track whether any standalone action ran so we know whether to also show a session report
+    any_standalone_ran = False
 
     if args.export_history:
         from .summary import export_session_history_csv
@@ -620,6 +651,7 @@ def main():
             print(f"Saved session history CSV: {result}")
         else:
             print("No session logs found in logs/. Nothing exported.")
+        any_standalone_ran = True
 
     if args.daily_summary:
         daily_report = build_daily_report("logs")
@@ -627,10 +659,23 @@ def main():
             print(render_daily_report(daily_report))
         else:
             print("No sessions recorded today.")
-        if not args.file:
-            return
+        any_standalone_ran = True
 
-    if not args.file and not args.daily_summary and args.export_history:
+    if args.distraction_heatmap:
+        buckets = compute_hour_of_day_distraction("logs")
+        if buckets:
+            print("\n=== Distraction Heatmap (Hour of Day) ===")
+            print(render_distraction_heatmap(buckets))
+            worst = find_worst_focus_hours(buckets, top_n=3)
+            best = find_best_focus_hours(buckets, top_n=3)
+            print("\nWorst focus hours:", ", ".join(f"{e['hour']:02d}:00 ({e['distracted_pct']:.0f}%)" for e in worst))
+            print("Best  focus hours:", ", ".join(f"{e['hour']:02d}:00 ({e['distracted_pct']:.0f}%)" for e in best))
+        else:
+            print("No session data found for heatmap.")
+        any_standalone_ran = True
+
+    # Only show a per-session report if --file is given, or no standalone action ran
+    if not args.file and any_standalone_ran:
         return
 
     csv_path = args.file or latest_session_file("logs")

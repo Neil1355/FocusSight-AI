@@ -514,6 +514,8 @@ def run_focus_tracker(
     reminder_policy=DEFAULT_REMINDER_POLICY,
     dashboard=False,
     dashboard_interval=5.0,
+    streak_goal_seconds=0.0,
+    note="",
 ):
     face_cascade_local, eye_cascade_local, profile_face_cascade_local = ensure_cascades(face_xml, eye_xml)
     cap = cv2.VideoCapture(camera_index)
@@ -560,6 +562,14 @@ def run_focus_tracker(
     session_focus_scores = []
     session_distracted_count = 0
     session_frame_count = 0
+
+    # Phase 9: personal best streak tracking
+    from .summary import compute_streak_records, check_streak_milestone
+    _records = compute_streak_records("logs")
+    all_time_best_streak = _records["best_streak_seconds"] if _records else 0.0
+    current_focused_streak = 0.0
+    session_best_streak = 0.0
+    last_milestone_reported = ""
 
     if logging_enabled:
         log_file_handle, log_writer, active_log_path = start_session_logger()
@@ -660,8 +670,23 @@ def run_focus_tracker(
                 distracted_since = None
                 active_prompt_text = ""
                 active_prompt_until = 0.0
-            elif distracted_since is None:
-                distracted_since = now
+                prev_focused_streak = current_focused_streak
+                current_focused_streak += frame_interval_seconds
+                if current_focused_streak > session_best_streak:
+                    session_best_streak = current_focused_streak
+                milestone = check_streak_milestone(
+                    current_focused_streak,
+                    record_seconds=all_time_best_streak,
+                    streak_goal_seconds=streak_goal_seconds,
+                    prev_streak_seconds=prev_focused_streak,
+                )
+                if milestone and milestone != last_milestone_reported:
+                    log_info(milestone, quiet)
+                    last_milestone_reported = milestone
+            else:
+                current_focused_streak = 0.0
+                if distracted_since is None:
+                    distracted_since = now
 
             if dashboard and (now - last_dashboard_at) >= dashboard_interval:
                 elapsed = now - session_start_time
@@ -828,6 +853,10 @@ def run_focus_tracker(
             log_file_handle.close()
         if auto_report and active_log_path and active_log_path not in generated_report_logs:
             generate_ops_artifacts(active_log_path, report_dir=report_dir, quiet=quiet)
+        if note and active_log_path:
+            from .summary import save_session_note
+            note_file = save_session_note(active_log_path, note)
+            log_info(f"Session note saved: {note_file}", quiet)
 
     cap.release()
     cv2.destroyAllWindows()
@@ -878,6 +907,20 @@ def parse_args():
         default=5.0,
         help="Seconds between live dashboard prints (default: 5.0)",
     )
+    parser.add_argument(
+        "--streak-goal",
+        type=float,
+        default=0.0,
+        metavar="SECONDS",
+        help="Personal focused-streak goal in seconds; notifies when goal is reached",
+    )
+    parser.add_argument(
+        "--note",
+        type=str,
+        default="",
+        metavar="TEXT",
+        help="Short annotation saved alongside the session log after the run",
+    )
     return parser.parse_args()
 
 
@@ -921,6 +964,8 @@ def main():
         reminder_policy=runtime_config["reminder_policy"],
         dashboard=args.dashboard,
         dashboard_interval=args.dashboard_interval,
+        streak_goal_seconds=args.streak_goal,
+        note=args.note,
     )
 
     if args.save_profile:
