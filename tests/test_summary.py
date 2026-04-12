@@ -2,6 +2,7 @@ import csv
 import os
 import tempfile
 import unittest
+from datetime import datetime
 
 from focussight.summary import (
     compute_adaptive_thresholds,
@@ -15,6 +16,7 @@ from focussight.summary import (
     summarize_by_week,
     summarize_file,
     summarize_rows,
+    summarize_today,
     tune_recommendation,
 )
 
@@ -222,6 +224,44 @@ class SessionSummaryTests(unittest.TestCase):
             self.assertEqual(result["based_on_sessions"], 1)
             self.assertGreaterEqual(result["suggested_threshold"], 0.45)
             self.assertLessEqual(result["suggested_threshold"], 0.80)
+
+    def test_summarize_today_no_sessions(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = summarize_today(log_dir=temp_dir)
+            self.assertIsNone(result)
+
+    def test_summarize_today_with_old_session_only(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logs_dir = os.path.join(temp_dir, "logs")
+            os.makedirs(logs_dir)
+            old_rows = [
+                {"timestamp": "2020-01-01T10:00:00", "elapsed_seconds": "0.0",
+                 "frame_interval_seconds": "0.2", "observed_fps": "5.0",
+                 "focus_score": "0.8", "state": "FOCUSED"},
+            ]
+            self._write_session_csv(os.path.join(logs_dir, "focus_session_old.csv"), old_rows)
+            result = summarize_today(log_dir=logs_dir)
+            self.assertIsNone(result)
+
+    def test_summarize_today_with_todays_session(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logs_dir = os.path.join(temp_dir, "logs")
+            os.makedirs(logs_dir)
+            today_ts = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+            today_rows = [
+                {"timestamp": today_ts, "elapsed_seconds": "0.0",
+                 "frame_interval_seconds": "0.2", "observed_fps": "5.0",
+                 "focus_score": "0.85", "state": "FOCUSED"},
+                {"timestamp": today_ts, "elapsed_seconds": "0.2",
+                 "frame_interval_seconds": "0.2", "observed_fps": "5.0",
+                 "focus_score": "0.35", "state": "DISTRACTED"},
+            ]
+            self._write_session_csv(os.path.join(logs_dir, "focus_session_today.csv"), today_rows)
+            result = summarize_today(log_dir=logs_dir)
+            self.assertIsNotNone(result)
+            self.assertEqual(result["session_count"], 1)
+            self.assertAlmostEqual(result["avg_focus"], (0.85 + 0.35) / 2)
+            self.assertIn("session_files", result)
 
 
 if __name__ == "__main__":

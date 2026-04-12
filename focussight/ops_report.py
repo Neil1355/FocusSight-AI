@@ -11,6 +11,7 @@ from .summary import (
     summarize_directory_temporal,
     summarize_directory_with_tags,
     summarize_file,
+    summarize_today,
 )
 
 
@@ -486,6 +487,100 @@ def save_ops_report_json(report, path):
         json.dump(report, handle, indent=2)
 
 
+def build_daily_report(log_dir="logs"):
+    """Build an aggregate report for all sessions recorded today.
+
+    Returns a dict containing today's aggregated stats and cognitive metrics,
+    or None when no sessions were recorded today.
+    """
+    today_stats = summarize_today(log_dir)
+    if today_stats is None:
+        return None
+
+    all_rows = []
+    for file_path in today_stats.get("session_files", []):
+        all_rows.extend(load_session_rows(file_path))
+
+    cog_metrics = derive_cog_sci_metrics(today_stats, all_rows)
+    windows = extract_focus_windows(all_rows)
+    temporal_trends = summarize_directory_temporal(log_dir)
+    recommendations = build_recommendations(today_stats, cog_metrics, windows, temporal_trends)
+    scorecard = build_session_scorecard(today_stats, cog_metrics)
+
+    return {
+        "date": today_stats["date"],
+        "session_count": today_stats["session_count"],
+        "session_files": today_stats["session_files"],
+        "stats": today_stats,
+        "cog_sci": cog_metrics,
+        "focus_windows": windows,
+        "temporal_trends": temporal_trends,
+        "recommendations": recommendations,
+        "scorecard": scorecard,
+    }
+
+
+def render_daily_report(report):
+    """Render a daily aggregate report as a formatted text string."""
+    stats = report["stats"]
+    cog = report["cog_sci"]
+    recommendations = report.get("recommendations", [])
+    scorecard = report.get("scorecard", {"score": 0.0, "status": "unknown", "checks": {}})
+    windows = report.get("focus_windows", {"best": [], "worst": []})
+
+    best_windows = windows.get("best", [])
+    worst_windows = windows.get("worst", [])
+    best_line = (
+        f"{best_windows[0]['start_seconds']:.0f}-{best_windows[0]['end_seconds']:.0f}s "
+        f"({best_windows[0]['avg_focus'] * 100:.1f}%)"
+        if best_windows
+        else "insufficient data"
+    )
+    worst_line = (
+        f"{worst_windows[0]['start_seconds']:.0f}-{worst_windows[0]['end_seconds']:.0f}s "
+        f"({worst_windows[0]['avg_focus'] * 100:.1f}%)"
+        if worst_windows
+        else "insufficient data"
+    )
+
+    lines = [
+        f"FocusSight Daily Summary — {report['date']}",
+        f"Sessions recorded today: {report['session_count']}",
+        "",
+        "Aggregate Session Metrics",
+        f"- Average focus: {stats['avg_focus'] * 100:.1f}%",
+        f"- Distracted frames: {stats['distracted_pct']:.1f}%",
+        f"- Longest distracted streak: {stats['longest_distracted_streak_seconds']:.2f}s",
+        f"- Average FPS: {stats['avg_fps']:.1f}",
+        f"- Total frames logged: {stats['rows']}",
+        "",
+        "Cognitive Operations Metrics",
+        f"- Vigilance index: {cog['vigilance_index']:.2f}",
+        f"- Stability index: {cog['stability_index']:.2f}",
+        f"- Operational readiness: {cog['operational_readiness']:.2f}",
+        f"- Attention lapse events: {cog['attention_lapse_events']}",
+        f"- Mean recovery time: {cog['mean_recovery_seconds']:.2f}s",
+        f"- Interpretation: {cog['interpretation']}",
+        "",
+        "Focus Windows",
+        f"- Best: {best_line}",
+        f"- Worst: {worst_line}",
+        "",
+        "Recommendations",
+    ]
+
+    for rec in recommendations:
+        lines.append(f"- {rec}")
+
+    lines.extend([
+        "",
+        "Daily Scorecard",
+        f"- Goal score: {scorecard.get('score', 0.0) * 100:.1f}%",
+        f"- Status: {scorecard.get('status', 'unknown')}",
+    ])
+    return "\n".join(lines)
+
+
 def latest_session_file(log_dir="logs"):
     summaries = summarize_directory(log_dir)
     if not summaries:
@@ -507,6 +602,11 @@ def parse_args():
         metavar="PATH",
         help="Export a one-row-per-session history CSV to PATH",
     )
+    parser.add_argument(
+        "--daily-summary",
+        action="store_true",
+        help="Print an aggregate report for all sessions recorded today",
+    )
     return parser.parse_args()
 
 
@@ -520,8 +620,18 @@ def main():
             print(f"Saved session history CSV: {result}")
         else:
             print("No session logs found in logs/. Nothing exported.")
+
+    if args.daily_summary:
+        daily_report = build_daily_report("logs")
+        if daily_report:
+            print(render_daily_report(daily_report))
+        else:
+            print("No sessions recorded today.")
         if not args.file:
             return
+
+    if not args.file and not args.daily_summary and args.export_history:
+        return
 
     csv_path = args.file or latest_session_file("logs")
     if not csv_path:

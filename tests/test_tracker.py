@@ -11,6 +11,7 @@ from focussight.tracker import (
     compute_signal_quality,
     derive_calibrated_config,
     evaluate_focus_state,
+    format_live_dashboard,
     load_profile,
     normalize_config,
     resolve_runtime_config,
@@ -291,6 +292,41 @@ class FocusLogicTests(unittest.TestCase):
             self.assertTrue(os.path.exists(profile_path))
             loaded = load_profile(profile_path)
             self.assertAlmostEqual(loaded["focused_threshold"], result["suggested_threshold"])
+
+    def test_format_live_dashboard_focused(self):
+        line = format_live_dashboard(
+            state="FOCUSED",
+            focus_pct=82.0,
+            distracted_pct=18.0,
+            elapsed_seconds=125.0,
+            streak_seconds=0.0,
+            signal_status="TRACKING_OK",
+            logging_enabled=True,
+            reminder_policy_key="balanced",
+        )
+        self.assertIn("FOCUSED", line)
+        self.assertIn("82%", line)
+        self.assertIn("18%", line)
+        self.assertIn("02:05", line)
+        self.assertIn("TRACKING_OK", line)
+        self.assertIn("LOG:ON", line)
+        self.assertIn("balanced", line)
+
+    def test_format_live_dashboard_distracted(self):
+        line = format_live_dashboard(
+            state="DISTRACTED",
+            focus_pct=40.0,
+            distracted_pct=60.0,
+            elapsed_seconds=60.0,
+            streak_seconds=12.0,
+            signal_status="LOW_CONFIDENCE",
+            logging_enabled=False,
+            reminder_policy_key="strict",
+        )
+        self.assertIn("DISTRACTED", line)
+        self.assertIn("streak=12s", line)
+        self.assertIn("LOG:OFF", line)
+        self.assertIn("strict", line)
 
 
 if __name__ == "__main__":

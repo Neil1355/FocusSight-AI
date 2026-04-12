@@ -3,19 +3,38 @@ import tempfile
 import os
 import json
 import csv
+from datetime import datetime
 
 from focussight.ops_report import (
+    build_daily_report,
     build_ops_report,
     build_recommendations,
     build_session_scorecard,
     build_tag_comparison,
     derive_cog_sci_metrics,
+    render_daily_report,
     render_ops_report,
     render_ops_report_html,
     save_ops_report_html,
     save_ops_report_json,
 )
 
+
+def _write_session_csv(path, rows, today=False):
+    """Write a minimal session CSV. If today=True, use today's timestamp."""
+    ts = datetime.now().strftime("%Y-%m-%dT%H:%M:%S") if today else "2026-04-01T10:00:00"
+    fieldnames = [
+        "timestamp", "elapsed_seconds", "frame_interval_seconds",
+        "observed_fps", "focus_score", "state",
+    ]
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            row_copy = dict(row)
+            if today:
+                row_copy["timestamp"] = ts
+            writer.writerow(row_copy)
 
 class OpsReportTests(unittest.TestCase):
     def test_derive_cog_sci_metrics(self):
@@ -297,6 +316,67 @@ class OpsReportTests(unittest.TestCase):
             with open(out_path, encoding="utf-8") as fh:
                 content = fh.read()
             self.assertIn("<!DOCTYPE html>", content)
+
+    def test_build_daily_report_no_sessions_today(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = build_daily_report(log_dir=temp_dir)
+            self.assertIsNone(result)
+
+    def test_build_daily_report_with_todays_sessions(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logs_dir = os.path.join(temp_dir, "logs")
+            os.makedirs(logs_dir)
+            csv_path = os.path.join(logs_dir, "focus_session_today.csv")
+            rows = [
+                {"elapsed_seconds": "0.0", "frame_interval_seconds": "0.2",
+                 "observed_fps": "5.0", "focus_score": "0.8", "state": "FOCUSED"},
+                {"elapsed_seconds": "0.2", "frame_interval_seconds": "0.2",
+                 "observed_fps": "5.0", "focus_score": "0.3", "state": "DISTRACTED"},
+            ]
+            _write_session_csv(csv_path, rows, today=True)
+            cwd = os.getcwd()
+            try:
+                os.chdir(temp_dir)
+                report = build_daily_report(log_dir=logs_dir)
+            finally:
+                os.chdir(cwd)
+            self.assertIsNotNone(report)
+            self.assertEqual(report["session_count"], 1)
+            self.assertIn("cog_sci", report)
+            self.assertIn("recommendations", report)
+            self.assertIn("scorecard", report)
+
+    def test_render_daily_report_output(self):
+        report = {
+            "date": "2026-04-12",
+            "session_count": 2,
+            "session_files": ["logs/a.csv", "logs/b.csv"],
+            "stats": {
+                "rows": 40,
+                "avg_focus": 0.72,
+                "avg_fps": 7.5,
+                "distracted_pct": 28.0,
+                "longest_distracted_streak_frames": 5,
+                "longest_distracted_streak_seconds": 2.5,
+            },
+            "cog_sci": {
+                "vigilance_index": 0.72,
+                "stability_index": 0.65,
+                "operational_readiness": 0.69,
+                "attention_lapse_events": 4,
+                "mean_recovery_seconds": 1.2,
+                "interpretation": "Moderate readiness; include short periodic resets",
+            },
+            "focus_windows": {"best": [], "worst": []},
+            "recommendations": ["Maintain current routine."],
+            "scorecard": {"score": 0.80, "status": "on-track", "checks": {}},
+        }
+        text = render_daily_report(report)
+        self.assertIn("FocusSight Daily Summary", text)
+        self.assertIn("2026-04-12", text)
+        self.assertIn("Sessions recorded today: 2", text)
+        self.assertIn("Recommendations", text)
+        self.assertIn("Daily Scorecard", text)
 
 
 if __name__ == "__main__":

@@ -362,6 +362,37 @@ def compute_adaptive_thresholds(log_dir="logs", recent_sessions=5):
     }
 
 
+def summarize_today(log_dir="logs"):
+    """Aggregate rows from all sessions logged today (local date).
+
+    Returns a dict with aggregate stats and the list of today's session files,
+    or None when no sessions were recorded today.
+    """
+    today = datetime.now().date()
+    pattern = os.path.join(log_dir, "focus_session_*.csv")
+    files = sorted(glob.glob(pattern))
+
+    today_files = []
+    all_rows = []
+    for file_path in files:
+        rows = load_session_rows(file_path)
+        if not rows:
+            continue
+        ts = _parse_timestamp(rows[0].get("timestamp") or "")
+        if ts and ts.date() == today:
+            today_files.append(file_path)
+            all_rows.extend(rows)
+
+    if not today_files:
+        return None
+
+    stats = summarize_rows(all_rows)
+    stats["date"] = today.isoformat()
+    stats["session_files"] = today_files
+    stats["session_count"] = len(today_files)
+    return stats
+
+
 def print_report(summary):
     print(f"Session file: {summary['file']}")
     print(f"Rows: {summary['rows']}")

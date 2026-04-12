@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-04-12
+
+- Added Phase 7 live terminal dashboard in `focussight/tracker.py`: `format_live_dashboard()` builds a compact one-line stat summary (state, avg focus, distracted %, current streak, elapsed time, signal status, policy, log status).
+- Extended `run_focus_tracker()` with `dashboard` and `dashboard_interval` parameters; when `--dashboard` is passed the dashboard line is printed to stdout every `dashboard_interval` seconds (default 5s).
+- Added `--dashboard` and `--dashboard-interval` CLI flags to `eye_test.py` / tracker `main()`.
+- Added Phase 8 daily summary in `focussight/summary.py`: `summarize_today(log_dir)` aggregates rows from all sessions recorded on the current local date.
+- Added `build_daily_report(log_dir)` in `focussight/ops_report.py` to produce a full cognitive-operations report for the current day (aggregate stats, cognitive metrics, focus windows, recommendations, scorecard).
+- Added `render_daily_report(report)` in `focussight/ops_report.py` for readable text output.
+- Added `--daily-summary` CLI flag in `ops_report.py`; prints today's aggregate report without needing a specific session file.
+- Expanded `tests/test_summary.py` with tests for `summarize_today` (no sessions, old sessions only, and today's sessions).
+- Expanded `tests/test_ops_report.py` with tests for `build_daily_report` and `render_daily_report`.
+- Expanded `tests/test_tracker.py` with tests for `format_live_dashboard` (focused and distracted states).
+- Updated `docs/ROADMAP.md`: added Phase 7 and Phase 8 entries as completed.
+
 ## 2026-04-08
 
 - Added Phase 5 multi-session history export in `focussight/summary.py`: `export_session_history_csv()` writes one summary row per session to a single CSV file for external analysis.

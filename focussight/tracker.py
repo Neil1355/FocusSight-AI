@@ -56,6 +56,35 @@ def log_info(message, quiet=False):
         print(message)
 
 
+def format_live_dashboard(
+    state,
+    focus_pct,
+    distracted_pct,
+    elapsed_seconds,
+    streak_seconds,
+    signal_status,
+    logging_enabled,
+    reminder_policy_key,
+):
+    """Return a compact single-line dashboard string for terminal output during tracking.
+
+    Designed to be printed periodically (e.g. every 5 seconds) so the user can
+    monitor session health without looking at the OpenCV window.
+    """
+    elapsed_min = int(elapsed_seconds) // 60
+    elapsed_sec = int(elapsed_seconds) % 60
+    log_indicator = "LOG:ON" if logging_enabled else "LOG:OFF"
+    state_label = f"[{state}]"
+    return (
+        f"{state_label:<12} "
+        f"focus={focus_pct:.0f}%  distracted={distracted_pct:.0f}%  "
+        f"streak={streak_seconds:.0f}s  "
+        f"elapsed={elapsed_min:02d}:{elapsed_sec:02d}  "
+        f"signal={signal_status}  "
+        f"policy={reminder_policy_key}  {log_indicator}"
+    )
+
+
 def parse_session_tags(task_tag=None, context_tag=None, location_tag=None):
     """Normalize optional session tags used for grouped analytics."""
     def _clean(value):
@@ -483,6 +512,8 @@ def run_focus_tracker(
     context_tag="",
     location_tag="",
     reminder_policy=DEFAULT_REMINDER_POLICY,
+    dashboard=False,
+    dashboard_interval=5.0,
 ):
     face_cascade_local, eye_cascade_local, profile_face_cascade_local = ensure_cascades(face_xml, eye_xml)
     cap = cv2.VideoCapture(camera_index)
@@ -523,8 +554,12 @@ def run_focus_tracker(
     session_start_time = time.time()
     last_frame_time = None
     last_reminder_at = None
+    last_dashboard_at = 0.0
     active_prompt_text = ""
     active_prompt_until = 0.0
+    session_focus_scores = []
+    session_distracted_count = 0
+    session_frame_count = 0
 
     if logging_enabled:
         log_file_handle, log_writer, active_log_path = start_session_logger()
@@ -616,12 +651,43 @@ def run_focus_tracker(
                 state_flip_timestamps.append(now)
             last_state = state
 
+            session_frame_count += 1
+            session_focus_scores.append(weighted_focus_score)
+            if state == "DISTRACTED":
+                session_distracted_count += 1
+
             if state == "FOCUSED":
                 distracted_since = None
                 active_prompt_text = ""
                 active_prompt_until = 0.0
             elif distracted_since is None:
                 distracted_since = now
+
+            if dashboard and (now - last_dashboard_at) >= dashboard_interval:
+                elapsed = now - session_start_time
+                avg_focus_pct = (
+                    (sum(session_focus_scores) / len(session_focus_scores)) * 100.0
+                    if session_focus_scores
+                    else 0.0
+                )
+                distracted_pct = (
+                    (session_distracted_count / session_frame_count) * 100.0
+                    if session_frame_count
+                    else 0.0
+                )
+                streak = max(0.0, now - distracted_since) if distracted_since else 0.0
+                dashboard_line = format_live_dashboard(
+                    state,
+                    avg_focus_pct,
+                    distracted_pct,
+                    elapsed,
+                    streak,
+                    signal_status,
+                    logging_enabled,
+                    reminder_policy_key,
+                )
+                print(dashboard_line)
+                last_dashboard_at = now
 
             if logging_enabled and log_writer is not None:
                 log_writer.writerow(
@@ -805,6 +871,13 @@ def parse_args():
         action="store_true",
         help="Update --save-profile thresholds from recent session history before running",
     )
+    parser.add_argument("--dashboard", action="store_true", help="Print live session stats to the terminal periodically")
+    parser.add_argument(
+        "--dashboard-interval",
+        type=float,
+        default=5.0,
+        help="Seconds between live dashboard prints (default: 5.0)",
+    )
     return parser.parse_args()
 
 
@@ -846,6 +919,8 @@ def main():
         context_tag=args.context_tag,
         location_tag=args.location_tag,
         reminder_policy=runtime_config["reminder_policy"],
+        dashboard=args.dashboard,
+        dashboard_interval=args.dashboard_interval,
     )
 
     if args.save_profile:

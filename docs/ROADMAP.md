@@ -70,6 +70,28 @@ Deliverables:
 - Auto-update a profile file from history before a run (`--auto-update-profile`)
 - Fall back gracefully when no history is available
 
+## Phase 7: Live Terminal Dashboard (completed)
+
+Goal: let users monitor session health from the terminal without watching the OpenCV window.
+
+Deliverables:
+
+- `format_live_dashboard()` helper producing a compact one-line stat summary
+- Periodic dashboard prints every N seconds during tracking (`--dashboard`, `--dashboard-interval`)
+- Tracks rolling session avg focus, distracted %, current streak, and signal status
+- Off by default to avoid clutter; respects `--quiet` mode
+
+## Phase 8: Daily Summary Report (completed)
+
+Goal: aggregate all of today's sessions into a single end-of-day report.
+
+Deliverables:
+
+- `summarize_today(log_dir)` in `summary.py` – filters sessions recorded today by timestamp
+- `build_daily_report(log_dir)` in `ops_report.py` – produces a full daily report dict (stats, cognitive metrics, windows, recommendations, scorecard)
+- `render_daily_report(report)` in `ops_report.py` – text form of the daily report
+- `--daily-summary` CLI flag in `ops_report.py` for quick end-of-day check-in
+
 ## Stepwise Execution Plan
 
 1. Complete Phase 2 fallback labels and reliability metrics.
