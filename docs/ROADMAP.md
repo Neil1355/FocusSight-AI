@@ -125,10 +125,44 @@ Deliverables:
 - Session note included in `render_ops_report()` text output and HTML report when present
 - `build_ops_report()` always includes a `note` key (empty string when no note file exists)
 
+---
 
+## Phase 12: Packaging & Distribution (planned)
 
-1. Complete Phase 2 fallback labels and reliability metrics.
-2. Validate with tests and update docs/changelog.
-3. Release and collect sample logs with weighted scoring.
-4. Build Phase 3 aggregation on top of richer session logs.
-5. Add coaching logic only after metric confidence is acceptable.
+Goal: make FocusSight AI trivially installable as a proper Python package so users can `pip install` it and run it anywhere without manually cloning the repo.
+
+Deliverables:
+
+- Add `pyproject.toml` (PEP 517/518) with package metadata, entry-point scripts (`focussight-track`, `focussight-report`), and dependency declarations
+- Publish to PyPI (or provide a local `pip install -e .` workflow for development)
+- Ensure cascade XML files are bundled as package data so they are always available after install
+- Update `README.md` installation section with `pip install focussight-ai` quick-start
+- Add a `Makefile` (or `tox.ini`) for one-command test, lint, and build targets
+
+## Phase 13: REST API / WebSocket Server (planned)
+
+Goal: expose FocusSight's real-time tracking data over a local HTTP/WebSocket interface so external clients (browser extensions, dashboards, integrations) can consume focus state without any Python knowledge.
+
+Deliverables:
+
+- Lightweight FastAPI server (`focussight/server.py`) that runs the tracker loop in a background thread
+- `/status` GET endpoint – returns current focus state, score, streak, signal quality, and session elapsed time as JSON
+- `/events` WebSocket endpoint – streams a focus-state event every second to connected clients
+- `/report` GET endpoint – returns the latest session ops-report JSON on demand
+- `--serve` CLI flag on the tracker to start the API alongside the webcam loop
+- CORS enabled by default for `localhost` origins so the browser extension can connect without extra config
+- Add tests for server endpoint contracts using `httpx` / `pytest-asyncio`
+
+## Phase 14: Browser Extension (planned)
+
+Goal: ship a lightweight Chrome/Firefox browser extension that reads focus state from the Phase 13 API and surfaces non-intrusive in-browser nudges — bringing FocusSight into the user's actual work environment.
+
+Deliverables:
+
+- Manifest V3 extension with a popup showing live focus score, state badge, and session streak
+- Background service-worker that polls `/status` (or subscribes to `/events` WebSocket) every second
+- Non-intrusive banner/toast notification when a distraction streak exceeds the user's alert threshold
+- Options page: server URL (default `http://localhost:8765`), notification style (banner / silent / none), distraction threshold override
+- Extension icon badge colour changes with state: green (FOCUSED), amber (LOW_CONFIDENCE), red (DISTRACTED)
+- Packaged as a `.zip` ready for Chrome Web Store submission and as an unsigned `.xpi` for Firefox
+- Developer docs explaining how to load the extension unpacked for local testing

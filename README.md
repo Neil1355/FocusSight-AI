@@ -564,8 +564,26 @@ The test suite covers tracker logic, signal quality, calibration, profile I/O, r
 
 ## Project Documentation
 
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — full phase-by-phase development plan (Phases 1–11 complete)
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — full phase-by-phase development plan (Phases 1–11 complete, Phases 12–14 planned)
 - [`docs/CHANGELOG.md`](docs/CHANGELOG.md) — detailed change history per release
+
+---
+
+## Upcoming Phases
+
+FocusSight AI has **3 planned phases** remaining before the project reaches its full-featured milestone, including the browser extension the roadmap has always been building toward.
+
+| Phase | Name | Status |
+|---|---|---|
+| 12 | Packaging & Distribution | Planned |
+| 13 | REST API / WebSocket Server | Planned |
+| 14 | Browser Extension | Planned |
+
+**Phase 12 — Packaging & Distribution** turns FocusSight into a proper `pip`-installable package (`focussight-ai`) with entry-point CLI commands, bundled cascade files, and a one-command dev setup.
+
+**Phase 13 — REST API / WebSocket Server** adds a lightweight FastAPI server (`--serve`) that exposes real-time focus state, score, and ops-report data over local HTTP/WebSocket endpoints — the essential bridge between the Python tracker and any external client.
+
+**Phase 14 — Browser Extension** delivers a Manifest V3 Chrome/Firefox extension that connects to the Phase 13 API and shows live focus state, a colour-coded badge, and non-intrusive distraction alerts directly inside the browser — no terminal window required.
 
 ---
 

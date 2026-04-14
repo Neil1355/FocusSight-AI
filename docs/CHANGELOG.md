@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-04-14 (Phases 12–14 planning)
+
+- Cleaned up orphaned bullet list at the bottom of `docs/ROADMAP.md` left over from an earlier draft.
+- Added Phase 12 (Packaging & Distribution), Phase 13 (REST API / WebSocket Server), and Phase 14 (Browser Extension) to `docs/ROADMAP.md` as the three remaining planned phases.
+- Updated `README.md` Project Documentation section: now notes Phases 1–11 complete and Phases 12–14 planned.
+- Added "Upcoming Phases" table and description to `README.md` so the project end-state (browser extension) and the path there are clearly signposted.
+
 ## 2026-04-12 (Phase 9–11)
 
 - Added Phase 9 focus streak goals in `focussight/summary.py`: `compute_streak_records()` scans all session logs for the all-time best focused run; `check_streak_milestone()` returns achievement strings for round milestones (30s, 1 min, 2 min, 5 min, 10 min, 15 min, 30 min), user-defined streak goals, and personal bests.
