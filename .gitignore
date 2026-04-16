@@ -2,3 +2,6 @@ __pycache__/
 *.py[cod]
 .venv/
 logs/
+dist/
+*.egg-info/
+.pytest_cache/

@@ -125,9 +125,7 @@ Deliverables:
 - Session note included in `render_ops_report()` text output and HTML report when present
 - `build_ops_report()` always includes a `note` key (empty string when no note file exists)
 
----
-
-## Phase 12: Packaging & Distribution (planned)
+## Phase 12: Packaging & Distribution (completed)
 
 Goal: make FocusSight AI trivially installable as a proper Python package so users can `pip install` it and run it anywhere without manually cloning the repo.
 
@@ -139,7 +137,7 @@ Deliverables:
 - Update `README.md` installation section with `pip install focussight-ai` quick-start
 - Add a `Makefile` (or `tox.ini`) for one-command test, lint, and build targets
 
-## Phase 13: REST API / WebSocket Server (planned)
+## Phase 13: REST API / WebSocket Server (completed)
 
 Goal: expose FocusSight's real-time tracking data over a local HTTP/WebSocket interface so external clients (browser extensions, dashboards, integrations) can consume focus state without any Python knowledge.
 
@@ -153,7 +151,7 @@ Deliverables:
 - CORS enabled by default for `localhost` origins so the browser extension can connect without extra config
 - Add tests for server endpoint contracts using `httpx` / `pytest-asyncio`
 
-## Phase 14: Browser Extension (planned)
+## Phase 14: Browser Extension (completed)
 
 Goal: ship a lightweight Chrome/Firefox browser extension that reads focus state from the Phase 13 API and surfaces non-intrusive in-browser nudges — bringing FocusSight into the user's actual work environment.
 

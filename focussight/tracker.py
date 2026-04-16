@@ -714,6 +714,34 @@ def run_focus_tracker(
                 print(dashboard_line)
                 last_dashboard_at = now
 
+            # Phase 13: push live state to the API server (no-op if not running).
+            try:
+                from .server import update_live_state as _push
+                elapsed_now = now - session_start_time
+                avg_f = (
+                    (sum(session_focus_scores) / len(session_focus_scores)) * 100.0
+                    if session_focus_scores else 0.0
+                )
+                dist_pct = (
+                    (session_distracted_count / session_frame_count) * 100.0
+                    if session_frame_count else 0.0
+                )
+                _push(
+                    state=state,
+                    focus_score=round(weighted_focus_score, 4),
+                    signal_status=signal_status,
+                    elapsed_seconds=round(elapsed_now, 2),
+                    focused_streak_seconds=round(current_focused_streak, 2),
+                    distracted_streak_seconds=round(now - distracted_since, 2) if distracted_since else 0.0,
+                    avg_focus_pct=round(avg_f, 2),
+                    distracted_pct=round(dist_pct, 2),
+                    reminder_policy=reminder_policy_key,
+                    logging_enabled=logging_enabled,
+                    session_log_path=active_log_path,
+                )
+            except Exception:
+                pass
+
             if logging_enabled and log_writer is not None:
                 log_writer.writerow(
                     [
@@ -921,11 +949,32 @@ def parse_args():
         metavar="TEXT",
         help="Short annotation saved alongside the session log after the run",
     )
+    parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="Start the FocusSight local API server (Phase 13) alongside the tracker on port 8765",
+    )
+    parser.add_argument(
+        "--serve-port",
+        type=int,
+        default=8765,
+        help="Port for the local API server when --serve is used (default: 8765)",
+    )
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+
+    if args.serve:
+        from .server import start_server
+        start_server(port=args.serve_port)
+        log_info(
+            f"FocusSight API server started on http://127.0.0.1:{args.serve_port} "
+            "(GET /status  GET /report  GET /health  WS /events)",
+            False,
+        )
+
     profile_values = load_profile(args.profile)
     cli_values = {
         "camera_index": args.camera_index,

@@ -66,21 +66,34 @@ FocusSight-AI/
 │   ├── __init__.py
 │   ├── tracker.py              # Real-time webcam tracking, CLI, session loop
 │   ├── summary.py              # Session analytics, history, streaks, heatmap, notes
-│   └── ops_report.py           # Cognitive operations report builder and renderer
+│   ├── ops_report.py           # Cognitive operations report builder and renderer
+│   └── server.py               # Phase 13: local REST / WebSocket API server
 │
-├── tests/                      # Automated test suite (78 tests)
+├── extension/                  # Phase 14: Manifest V3 browser extension
+│   ├── manifest.json           # Chrome / Firefox extension manifest
+│   ├── background.js           # Service worker – polls /status, updates badge
+│   ├── popup.html / popup.js   # Toolbar popup (live stats panel)
+│   ├── options.html / options.js # Settings page (server URL, notifications)
+│   ├── icons/                  # Extension icons (16/32/48/128 px)
+│   ├── generate_icons.py       # Script to regenerate placeholder icons
+│   ├── package_extension.py    # Script to produce .zip / .xpi packages
+│   └── README.md               # Extension usage & loading instructions
+│
+├── tests/                      # Automated test suite (90 tests)
 │   ├── test_tracker.py
 │   ├── test_summary.py
-│   └── test_ops_report.py
+│   ├── test_ops_report.py
+│   └── test_server.py          # Phase 13 API / state tests
 │
 ├── docs/
-│   ├── ROADMAP.md              # Phase-by-phase development plan
+│   ├── ROADMAP.md              # Phase-by-phase development plan (all 14 complete)
 │   └── CHANGELOG.md            # Release history
 │
 ├── eye_test.py                 # Backward-compatible tracker launcher
 ├── session_summary.py          # Backward-compatible summary launcher
 ├── ops_report.py               # Backward-compatible report launcher
 │
+├── pyproject.toml              # Phase 12: pip-installable package metadata
 ├── haarcascade_frontalface_default.xml   # Frontal face cascade (auto-downloaded if missing)
 ├── haarcascade_eye.xml                   # Eye cascade (auto-downloaded if missing)
 ├── haarcascade_profileface.xml           # Profile face cascade (auto-downloaded if missing)
@@ -507,6 +520,31 @@ python eye_test.py --autolog --note "Exam prep – third coffee, library was lou
 | `--dashboard-interval F` | float | Seconds between dashboard prints (default: 5) |
 | `--streak-goal F` | float | Personal focused-streak goal in seconds |
 | `--note TEXT` | str | Annotation saved alongside the session log |
+| `--serve` | flag | Start local API server on port 8765 alongside the tracker |
+| `--serve-port N` | int | Port for local API server (default: 8765) |
+
+### Local API Server (`python -m focussight.server`)
+
+Phase 13 — install `pip install "focussight-ai[server]"` first.
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/status` | GET | Current focus state as JSON |
+| `/report` | GET | Ops report JSON for the active session log |
+| `/health` | GET | Liveness probe — always returns `{"ok": true}` |
+| `/events` | WebSocket | Streams a state event every second |
+
+Start standalone (no webcam):
+
+```bash
+python -m focussight.server --host 127.0.0.1 --port 8765
+```
+
+Start alongside the tracker:
+
+```bash
+python eye_test.py --autolog --serve
+```
 
 ### Ops Report (`ops_report.py` / `python -m focussight.ops_report`)
 
@@ -558,32 +596,28 @@ python ops_report.py --distraction-heatmap
 python -m pytest tests/ -v
 ```
 
-The test suite covers tracker logic, signal quality, calibration, profile I/O, reminder policies, analytics, streak records, distraction heatmap, session notes, daily reports, HTML rendering, and the adaptive threshold learner — **78 tests** in total.
+The test suite covers tracker logic, signal quality, calibration, profile I/O, reminder policies, analytics, streak records, distraction heatmap, session notes, daily reports, HTML rendering, adaptive threshold learner, and the Phase 13 API server — **90 tests** in total.
 
 ---
 
 ## Project Documentation
 
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — full phase-by-phase development plan (Phases 1–11 complete, Phases 12–14 planned)
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — full phase-by-phase development plan (all 14 phases complete)
 - [`docs/CHANGELOG.md`](docs/CHANGELOG.md) — detailed change history per release
 
 ---
 
 ## Upcoming Phases
 
-FocusSight AI has **3 planned phases** remaining before the project reaches its full-featured milestone, including the browser extension the roadmap has always been building toward.
+All 14 planned phases are now complete. FocusSight AI has reached its full-featured milestone — including the browser extension.
 
 | Phase | Name | Status |
 |---|---|---|
-| 12 | Packaging & Distribution | Planned |
-| 13 | REST API / WebSocket Server | Planned |
-| 14 | Browser Extension | Planned |
+| 12 | Packaging & Distribution | ✅ Complete |
+| 13 | REST API / WebSocket Server | ✅ Complete |
+| 14 | Browser Extension | ✅ Complete |
 
-**Phase 12 — Packaging & Distribution** turns FocusSight into a proper `pip`-installable package (`focussight-ai`) with entry-point CLI commands, bundled cascade files, and a one-command dev setup.
-
-**Phase 13 — REST API / WebSocket Server** adds a lightweight FastAPI server (`--serve`) that exposes real-time focus state, score, and ops-report data over local HTTP/WebSocket endpoints — the essential bridge between the Python tracker and any external client.
-
-**Phase 14 — Browser Extension** delivers a Manifest V3 Chrome/Firefox extension that connects to the Phase 13 API and shows live focus state, a colour-coded badge, and non-intrusive distraction alerts directly inside the browser — no terminal window required.
+See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`extension/README.md`](extension/README.md) for full details.
 
 ---
 
