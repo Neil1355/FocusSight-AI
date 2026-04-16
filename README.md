@@ -136,9 +136,9 @@ python -m venv .venv
 # macOS / Linux
 source .venv/bin/activate
 
-# 3. Install dependencies
+# 3. Install dependencies and package (editable)
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -e .
 
 # 4. Run the tracker
 python eye_test.py

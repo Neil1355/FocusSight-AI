@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-04-16 (Packaging metadata fix)
+
+- Added a PEP 621 `pyproject.toml` at the repository root so editable installs work (`pip install -e .`) and the project is recognized as a Python package.
+- Added console script entry points for tracker, summary, and ops report CLIs (`focussight-tracker`, `focussight-summary`, `focussight-ops-report`).
+- Updated manual installation in `README.md` to use editable install (`pip install -e .`) instead of only requirements installation.
+
 ## 2026-04-14 (Phases 12–14 planning)
 
 - Cleaned up orphaned bullet list at the bottom of `docs/ROADMAP.md` left over from an earlier draft.
