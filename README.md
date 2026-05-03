@@ -121,6 +121,8 @@ reports/    # Generated text, JSON, and HTML reports
 | Webcam | Any USB or built-in webcam |
 | OpenCV | `opencv-python==4.13` (installed from `requirements.txt`) |
 
+Optional: if you install a compatible `mediapipe` build, FocusSight AI will automatically use landmark-based face/eye confidence scoring when available and fall back to the OpenCV cascade pipeline otherwise.
+
 No GPU required. No cloud account required. No data leaves your machine.
 
 ---
@@ -174,6 +176,8 @@ python -m focussight.tracker
 ```
 
 An OpenCV window opens showing the live camera feed with bounding boxes around detected faces and eyes, plus a real-time focus percentage and state label.
+8
+> **Extension note:** the Chrome extension reads live state from the local tracker API, so it still needs the desktop app running in the background. The extension alone is not enough.
 
 **Keyboard controls while running:**
 
